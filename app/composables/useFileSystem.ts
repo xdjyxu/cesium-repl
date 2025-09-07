@@ -60,7 +60,7 @@ class MemoryFileSystem {
   }
 
   get changes$(): Observable<FileSystemChangeEvent | null> {
-    return this.changesSubject.asObservable()
+    return this.changesSubject
   }
 
   private emitChange(event: FileSystemChangeEvent): void {
