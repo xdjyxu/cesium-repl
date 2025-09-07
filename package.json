@@ -3,6 +3,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "lint": "eslint --fix",
     "build": "nuxt build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
@@ -10,8 +11,16 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "@unocss/nuxt": "^66.5.0",
     "nuxt": "^4.1.1",
+    "unocss": "^66.5.0",
     "vue": "^3.5.20",
     "vue-router": "^4.5.1"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^5.2.2",
+    "@unocss/eslint-plugin": "^66.5.0",
+    "eslint": "^9.34.0",
+    "eslint-plugin-format": "^1.0.1"
   }
 }
