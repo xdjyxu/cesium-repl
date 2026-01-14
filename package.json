@@ -8,23 +8,34 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
+    "typecheck": "nuxt typecheck",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "@rollup/browser": "^4.50.2",
+    "@rollup/pluginutils": "^5.3.0",
+    "@swc/wasm-web": "^1.15.8",
     "@unocss/nuxt": "^66.5.0",
     "@vueuse/core": "^13.9.0",
     "@vueuse/rxjs": "^14.0.0-alpha.0",
     "memfs": "^4.38.2",
+    "monaco-editor": "^0.55.1",
     "nuxt": "^4.1.1",
+    "pako": "^2.1.0",
+    "rollup": "^4.50.2",
     "rxjs": "^7.8.2",
+    "smob": "^1.5.0",
+    "typescript": "^5.9.2",
     "unocss": "^66.5.0",
     "vue": "^3.5.20",
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^5.2.2",
+    "@types/pako": "^2.0.4",
     "@unocss/eslint-plugin": "^66.5.0",
     "eslint": "^9.34.0",
-    "eslint-plugin-format": "^1.0.1"
+    "eslint-plugin-format": "^1.0.1",
+    "vitest": "^4.0.16"
   }
 }

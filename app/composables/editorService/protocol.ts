@@ -1,0 +1,128 @@
+import type * as monaco from 'monaco-editor'
+import type { Observable } from 'rxjs'
+import type { InjectionKey } from 'vue'
+
+/**
+ * 文件语言类型
+ */
+export type FileLanguage = 'typescript' | 'javascript' | 'html' | 'css' | 'json' | 'plaintext'
+
+/**
+ * Model 内容变化事件
+ */
+export interface ModelContentChangeEvent {
+  /**
+   * 文件路径
+   */
+  path: string
+
+  /**
+   * 新内容
+   */
+  content: string
+
+  /**
+   * Monaco 编辑器的变化事件
+   */
+  changes: monaco.editor.IModelContentChangedEvent
+}
+
+/**
+ * 编辑器文件信息
+ */
+export interface EditorFile {
+  /**
+   * 文件路径（作为 URI）
+   */
+  path: string
+
+  /**
+   * 文件语言类型
+   */
+  language: FileLanguage
+
+  /**
+   * Monaco Editor Model
+   */
+  model: monaco.editor.ITextModel
+
+  /**
+   * 文件内容
+   */
+  content: string
+}
+
+/**
+ * 编辑器服务接口
+ */
+export interface EditorService {
+  /**
+   * Model 内容变化事件流
+   */
+  modelContentChange$: Observable<ModelContentChangeEvent>
+
+  /**
+   * 创建或获取文件的 Monaco Model
+   * @param path 文件路径
+   * @param content 文件内容
+   * @param language 可选的语言类型，如果不提供则根据文件后缀自动判断
+   */
+  createOrGetModel: (path: string, content: string, language?: FileLanguage) => monaco.editor.ITextModel
+
+  /**
+   * 获取已存在的 Model
+   * @param path 文件路径
+   */
+  getModel: (path: string) => monaco.editor.ITextModel | null
+
+  /**
+   * 更新 Model 内容
+   * @param path 文件路径
+   * @param content 新内容
+   */
+  updateModel: (path: string, content: string) => void
+
+  /**
+   * 删除 Model
+   * @param path 文件路径
+   */
+  deleteModel: (path: string) => void
+
+  /**
+   * 获取所有 Models
+   */
+  getAllModels: () => EditorFile[]
+
+  /**
+   * 根据文件路径判断语言类型
+   * @param path 文件路径
+   */
+  detectLanguage: (path: string) => FileLanguage
+
+  /**
+   * 释放所有资源
+   */
+  dispose: () => void
+}
+
+// eslint-disable-next-line ts/no-redeclare
+export const EditorService = Symbol('EditorService') as InjectionKey<EditorService>
+
+/**
+ * 文件扩展名到语言的映射
+ */
+export const EXTENSION_TO_LANGUAGE: Record<string, FileLanguage> = {
+  '.ts': 'typescript',
+  '.tsx': 'typescript',
+  '.js': 'javascript',
+  '.jsx': 'javascript',
+  '.html': 'html',
+  '.htm': 'html',
+  '.css': 'css',
+  '.json': 'json',
+}
+
+/**
+ * 默认语言
+ */
+export const DEFAULT_LANGUAGE: FileLanguage = 'plaintext'
