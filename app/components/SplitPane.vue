@@ -89,8 +89,8 @@ const firstPaneStyle = computed(() => {
 
 const dividerClass = computed(() => {
   return props.direction === 'horizontal'
-    ? 'w-1 cursor-ew-resize hover:bg-blue-500'
-    : 'h-1 cursor-ns-resize hover:bg-blue-500'
+    ? 'w-1 cursor-ew-resize hover:bg-blue-600'
+    : 'h-1 cursor-ns-resize hover:bg-blue-600'
 })
 </script>
 
@@ -101,8 +101,8 @@ const dividerClass = computed(() => {
     </div>
 
     <div
-      class="bg-gray-300 transition-colors"
-      :class="[dividerClass, { 'bg-blue-500': isDragging }]"
+      class="bg-gray-700 transition-colors"
+      :class="[dividerClass, { 'bg-blue-600': isDragging }]"
       @mousedown="startDrag"
     />
 

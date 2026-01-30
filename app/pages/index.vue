@@ -1,15 +1,51 @@
+<script setup lang="ts">
+import type { SidebarView } from '~/components/Sidebar.vue'
+
+const activeView = ref<SidebarView>('editor')
+</script>
+
 <template>
-  <div class="min-h-screen flex items-center justify-center from-blue-400 to-purple-600 bg-gradient-to-br">
-    <div class="max-w-md rounded-lg bg-white p-8 shadow-lg">
-      <h1 class="mb-4 text-3xl text-gray-800 font-bold">
-        UnoCSS Test
-      </h1>
-      <p class="mb-4 text-gray-600">
-        如果你能看到这个样式化的卡片，说明UnoCSS已经成功配置！
-      </p>
-      <button class="rounded bg-blue-500 px-4 py-2 text-white transition-colors hover:bg-blue-600">
-        测试按钮
-      </button>
-    </div>
+  <div class="h-screen w-screen flex overflow-hidden bg-gray-900">
+    <!-- 左侧区域和右侧预览区域 -->
+    <SplitPane direction="horizontal" :initial-ratio="0.4" :min-size="300">
+      <template #first>
+        <!-- 左侧区域（侧边栏 + 主内容区） -->
+        <div class="h-full w-full flex flex-col overflow-hidden">
+          <!-- Header（只覆盖左侧） -->
+          <div class="h-10 flex items-center justify-between border-b border-gray-700 bg-gray-800 px-4">
+            <span class="text-sm text-gray-200 font-semibold">Cesium REPL</span>
+            <div class="flex items-center gap-2">
+              <button
+                class="h-7 rounded bg-gray-800 px-3 text-sm text-gray-400 transition-colors hover:bg-gray-700 hover:text-gray-200"
+                title="Share"
+              >
+                Share
+              </button>
+              <button
+                class="h-7 rounded bg-gray-800 px-3 text-sm text-gray-400 transition-colors hover:bg-gray-700 hover:text-gray-200"
+                title="Open in standalone window"
+              >
+                Standalone
+              </button>
+            </div>
+          </div>
+
+          <!-- 侧边栏 + 主内容区 -->
+          <div class="flex flex-1 overflow-hidden">
+            <Sidebar v-model:active-view="activeView" />
+
+            <div class="flex-1 overflow-hidden">
+              <GalleryPanel v-if="activeView === 'gallery'" />
+              <EditorPanel v-else />
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <template #second>
+        <!-- 右侧预览区域（独立，不受 header 影响） -->
+        <PreviewPanel />
+      </template>
+    </SplitPane>
   </div>
 </template>
