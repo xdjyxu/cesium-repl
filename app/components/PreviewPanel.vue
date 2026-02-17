@@ -44,11 +44,11 @@ function toggleConsole() {
         </div>
         <button
           v-if="isConsoleOpen"
-          class="h-6 w-6 flex items-center justify-center rounded bg-transparent text-gray-500 transition-colors hover:bg-gray-700 hover:text-gray-300"
+          class="h-7 w-7 flex items-center justify-center rounded bg-transparent text-red-500 transition-colors hover:bg-red-500/20 hover:text-red-400"
           title="Clear console"
           @click.stop
         >
-          <div class="i-carbon-trash-can text-sm" />
+          <div class="i-carbon-trash-can text-base" />
         </button>
       </div>
 
