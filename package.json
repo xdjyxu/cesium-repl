@@ -9,7 +9,9 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "typecheck": "nuxt typecheck",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "dependencies": {
     "@monaco-editor/loader": "^1.7.0",
