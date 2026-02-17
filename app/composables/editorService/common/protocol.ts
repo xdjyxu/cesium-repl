@@ -104,6 +104,13 @@ export interface EditorService {
   detectLanguage: (path: string) => FileLanguage
 
   /**
+   * 创建 Monaco Editor 实例并挂载到指定容器
+   * @param container 编辑器容器 DOM 元素
+   * @returns 创建的编辑器实例
+   */
+  createEditor: (container: HTMLElement) => Promise<monaco.editor.IStandaloneCodeEditor>
+
+  /**
    * 释放所有资源
    */
   dispose: () => void

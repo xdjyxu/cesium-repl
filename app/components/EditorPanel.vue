@@ -125,10 +125,14 @@ function handleToggleLock(tab: Tab) {
         <div class="i-carbon-code text-4xl" />
         <span class="text-sm">Select a file to edit</span>
       </div>
-      <div v-else class="h-full w-full flex items-center justify-center text-gray-500">
-        <!-- Monaco Editor 将在此集成 -->
-        Monaco Editor · {{ activeFilePath }}
-      </div>
+      <ClientOnly v-else>
+        <MonacoEditor :active-file-path="activeFilePath" />
+        <template #fallback>
+          <div class="h-full w-full flex items-center justify-center text-gray-500">
+            Loading editor...
+          </div>
+        </template>
+      </ClientOnly>
     </div>
   </div>
 </template>

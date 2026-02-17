@@ -199,6 +199,25 @@ export class EditorServiceImpl implements EditorService {
   }
 
   /**
+   * 创建 Monaco Editor 实例并挂载到指定容器
+   */
+  async createEditor(container: HTMLElement): Promise<monaco.editor.IStandaloneCodeEditor> {
+    const monacoInstance = await this._ensureMonaco()
+    return monacoInstance.editor.create(container, {
+      theme: 'vs-dark',
+      automaticLayout: true,
+      fontSize: 14,
+      minimap: {
+        enabled: true,
+      },
+      scrollBeyondLastLine: false,
+      wordWrap: 'off',
+      tabSize: 2,
+      insertSpaces: true,
+    })
+  }
+
+  /**
    * 释放所有资源
    */
   dispose(): void {
