@@ -5,11 +5,13 @@ import { registerServerMonacoLoaderService } from '~/composables/monacoLoaderSer
 import { registerServerProfileService } from '~/composables/profileService/node/useProfileService'
 import { registerShareService } from '~/composables/shareService/common/useShareService'
 import { registerServerStoreService } from '~/composables/storeService/node/useStoreService'
+import { registerTabService } from '~/composables/tabService/common/useTabService'
 
 export default defineNuxtPlugin((nuxtApp) => {
   // 通用服务
   registerFileService(nuxtApp.vueApp)
   registerShareService(nuxtApp.vueApp)
+  registerTabService(nuxtApp.vueApp)
 
   // 服务端专用实现（不依赖 window/localStorage）
   registerServerStoreService(nuxtApp.vueApp)

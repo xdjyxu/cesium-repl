@@ -62,6 +62,11 @@ export interface EditorService {
   modelContentChange$: Observable<ModelContentChangeEvent>
 
   /**
+   * 当前所有已注册的文件路径列表（响应式，随 createOrGetModel / deleteModel 更新）
+   */
+  files$: Observable<string[]>
+
+  /**
    * 创建或获取文件的 Monaco Model
    * 如果 Monaco 未初始化，会等待初始化完成
    * @param path 文件路径
@@ -91,12 +96,6 @@ export interface EditorService {
    * @param path 文件路径
    */
   deleteModel: (path: string) => void
-
-  /**
-   * 获取所有 Models
-   * Monaco 未初始化时返回空数组
-   */
-  getAllModels: () => EditorFile[]
 
   /**
    * 根据文件路径判断语言类型

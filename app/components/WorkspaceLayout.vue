@@ -9,6 +9,10 @@ defineProps<{
 }>()
 
 const activeView = ref<SidebarView>('editor')
+
+function handleSelectFile(_path: string) {
+  activeView.value = 'editor'
+}
 </script>
 
 <template>
@@ -19,7 +23,7 @@ const activeView = ref<SidebarView>('editor')
         <!-- 左侧区域（侧边栏 + 主内容区） -->
         <div class="h-full w-full flex flex-col overflow-hidden">
           <!-- Header（只覆盖左侧） -->
-          <div class="h-10 flex items-center justify-between border-b border-gray-700 bg-gray-800 px-4">
+          <div class="h-10 flex shrink-0 items-center justify-between border-b border-gray-700 bg-gray-800 px-4">
             <span class="text-sm text-gray-200 font-semibold">Cesium REPL</span>
             <div class="flex items-center gap-2">
               <button
@@ -43,6 +47,10 @@ const activeView = ref<SidebarView>('editor')
 
             <div class="flex-1 overflow-hidden">
               <GalleryPanel v-if="activeView === 'gallery'" />
+              <FileTreePanel
+                v-else-if="activeView === 'files'"
+                @select-file="handleSelectFile"
+              />
               <EditorPanel v-else />
             </div>
           </div>

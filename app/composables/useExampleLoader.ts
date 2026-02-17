@@ -3,6 +3,7 @@ import type { SandcastleShareData } from './shareService/common/protocol'
 import { useEditorService } from './editorService/browser/useEditorService'
 // import { useFileService } from './fileService/common/useFileService'
 import { useShareService } from './shareService/common/useShareService'
+import { useTabService } from './tabService/common/useTabService'
 
 /**
  * 示例文件信息
@@ -86,6 +87,7 @@ export function useExampleLoader(): ExampleLoaderReturn {
   // const fileService = useFileService()
   const editorService = useEditorService()
   const shareService = useShareService()
+  const tabService = useTabService()
   const route = useRoute()
 
   // 计算当前示例 ID 和类型
@@ -139,10 +141,12 @@ export function useExampleLoader(): ExampleLoaderReturn {
    * 清空所有文件
    */
   async function clearAll() {
+    // 关闭所有 Tab（强制，忽略锁定状态）
+    tabService.closeAll()
+
     // 清空所有 Monaco 模型
-    const models = editorService.getAllModels()
-    models.forEach((model) => {
-      editorService.deleteModel(model.path)
+    state.files.forEach((file) => {
+      editorService.deleteModel(file.path)
     })
 
     // 清空虚拟文件系统中的所有文件
@@ -172,19 +176,27 @@ export function useExampleLoader(): ExampleLoaderReturn {
       // 清空之前的文件
       await clearAll()
 
-      // 并行加载所有文件
+      // 并行创建所有文件的 Monaco 模型（不自动打开 Tab）
       await Promise.all(
         files.map(async (file) => {
           // 写入到虚拟文件系统
           // await fileService.writeFile(file.path, file.content)
 
           // 创建 Monaco 编辑器模型（根据文件扩展名自动检测语言）
-          editorService.createOrGetModel(file.path, file.content)
+          await editorService.createOrGetModel(file.path, file.content)
         }),
       )
 
       // 更新状态
       state.files = [...files]
+
+      // 默认激活 main.js，若不存在则激活第一个文件
+      // openTab 会同时打开 Tab 并激活，只对默认文件调用
+      const mainFile = files.find(f => /\/main\.[jt]sx?$/.test(f.path) || /^main\.[jt]sx?$/.test(f.path))
+        ?? files[0]
+      if (mainFile) {
+        tabService.openTab(mainFile.path)
+      }
     }
     catch (err) {
       state.error = err instanceof Error ? err : new Error(String(err))
@@ -274,10 +286,10 @@ export function useExampleLoader(): ExampleLoaderReturn {
 
   // 组件卸载时清理
   onUnmounted(() => {
-    // 同步清理 Monaco 模型即可，文件系统会在页面关闭时自动释放
-    const models = editorService.getAllModels()
-    models.forEach((model) => {
-      editorService.deleteModel(model.path)
+    // 关闭所有 Tab 并销毁 Monaco 模型
+    tabService.closeAll()
+    state.files.forEach((file) => {
+      editorService.deleteModel(file.path)
     })
   })
 

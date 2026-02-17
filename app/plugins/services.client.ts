@@ -5,6 +5,7 @@ import { registerMonacoLoaderService } from '~/composables/monacoLoaderService/b
 import { registerProfileService } from '~/composables/profileService/browser/useProfileService'
 import { registerShareService } from '~/composables/shareService/common/useShareService'
 import { registerStoreService } from '~/composables/storeService/browser/useStoreService'
+import { registerTabService } from '~/composables/tabService/common/useTabService'
 
 export default defineNuxtPlugin((nuxtApp) => {
   // 通用服务（浏览器和服务端实现相同）
@@ -17,4 +18,5 @@ export default defineNuxtPlugin((nuxtApp) => {
   registerCompileService(nuxtApp.vueApp)
   registerEditorService(nuxtApp.vueApp)
   registerProfileService(nuxtApp.vueApp)
+  registerTabService(nuxtApp.vueApp)
 })

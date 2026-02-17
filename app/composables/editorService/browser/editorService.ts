@@ -1,6 +1,6 @@
 import type * as monaco from 'monaco-editor'
-import type { EditorFile, EditorService, FileLanguage, ModelContentChangeEvent } from '../common/protocol'
-import { Subject } from 'rxjs'
+import type { EditorService, FileLanguage, ModelContentChangeEvent } from '../common/protocol'
+import { BehaviorSubject, Subject } from 'rxjs'
 import { Autowired, PostInject } from '../../inject'
 import { MonacoLoaderService } from '../../monacoLoaderService/common/protocol'
 import {
@@ -37,6 +37,16 @@ export class EditorServiceImpl implements EditorService {
    * Model 内容变化事件流（只读）
    */
   readonly modelContentChange$ = this._modelContentChangeSubject.asObservable()
+
+  /**
+   * 当前所有已注册文件路径的 Subject
+   */
+  private readonly _filesSubject = new BehaviorSubject<string[]>([])
+
+  /**
+   * 当前所有已注册文件路径列表（随 createOrGetModel / deleteModel 更新）
+   */
+  readonly files$ = this._filesSubject.asObservable()
 
   /**
    * 存储 model 的监听器，用于清理
@@ -143,6 +153,9 @@ export class EditorServiceImpl implements EditorService {
     // 为新创建的 model 添加变化监听器
     this._attachModelListener(path, model)
 
+    // 更新文件列表
+    this._filesSubject.next([...this._filesSubject.value, path])
+
     return model
   }
 
@@ -180,32 +193,9 @@ export class EditorServiceImpl implements EditorService {
       this._detachModelListener(path)
       // 再销毁 model
       model.dispose()
+      // 更新文件列表
+      this._filesSubject.next(this._filesSubject.value.filter(p => p !== path))
     }
-  }
-
-  /**
-   * 获取所有 Models
-   * Monaco 未初始化时返回空数组
-   */
-  getAllModels(): EditorFile[] {
-    if (!this._monaco) {
-      return []
-    }
-
-    const models = this._monaco.editor.getModels()
-
-    return models.map((model) => {
-      const uri = model.uri.toString()
-      // 从 file:/// 格式中提取路径
-      const path = uri.replace(/^file:\/\/\//, '')
-
-      return {
-        path,
-        language: model.getLanguageId() as FileLanguage,
-        model,
-        content: model.getValue(),
-      }
-    })
   }
 
   /**
@@ -218,6 +208,7 @@ export class EditorServiceImpl implements EditorService {
 
     // 关闭 Subject
     this._modelContentChangeSubject.complete()
+    this._filesSubject.complete()
 
     // 销毁所有 models（如果 monaco 已初始化）
     if (this._monaco) {

@@ -1,6 +1,6 @@
 import { createPluginService, createUseService } from '../../inject'
-import { MonacoLoaderServiceImpl } from './monacoLoaderService'
 import { MonacoLoaderService } from '../common/protocol'
+import { MonacoLoaderServiceImpl } from './monacoLoaderService'
 
 export const useMonacoLoaderService = createUseService(MonacoLoaderService)
 

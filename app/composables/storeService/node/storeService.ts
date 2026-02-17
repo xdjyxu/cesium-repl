@@ -1,6 +1,6 @@
+import type { Observable } from 'rxjs'
 import type { StoreChangeEvent, StoreService } from '../common/protocol'
 import { EMPTY } from 'rxjs'
-import type { Observable } from 'rxjs'
 
 /**
  * 服务端存储服务实现（内存版本）

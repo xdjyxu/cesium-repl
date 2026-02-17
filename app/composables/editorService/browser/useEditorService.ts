@@ -1,6 +1,6 @@
 import { createPluginService, createUseService } from '../../inject'
-import { EditorServiceImpl } from './editorService'
 import { EditorService } from '../common/protocol'
+import { EditorServiceImpl } from './editorService'
 
 export const useEditorService = createUseService(EditorService)
 

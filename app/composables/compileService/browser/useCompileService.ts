@@ -1,6 +1,6 @@
 import { createPluginService, createUseService } from '../../inject'
-import { CompileServiceImpl } from './compileService'
 import { CompileService } from '../common/protocol'
+import { CompileServiceImpl } from './compileService'
 
 export const useCompileService = createUseService(CompileService)
 

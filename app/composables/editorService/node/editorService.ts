@@ -1,6 +1,6 @@
 import type * as monaco from 'monaco-editor'
-import type { EditorFile, EditorService, FileLanguage, ModelContentChangeEvent } from '../common/protocol'
 import type { Observable } from 'rxjs'
+import type { EditorService, FileLanguage, ModelContentChangeEvent } from '../common/protocol'
 import { EMPTY } from 'rxjs'
 import { DEFAULT_LANGUAGE, EXTENSION_TO_LANGUAGE } from '../common/protocol'
 
@@ -11,6 +11,7 @@ import { DEFAULT_LANGUAGE, EXTENSION_TO_LANGUAGE } from '../common/protocol'
  */
 export class ServerEditorServiceImpl implements EditorService {
   readonly modelContentChange$: Observable<ModelContentChangeEvent> = EMPTY
+  readonly files$: Observable<string[]> = EMPTY
 
   createOrGetModel(
     _path: string,
@@ -27,10 +28,6 @@ export class ServerEditorServiceImpl implements EditorService {
   updateModel(_path: string, _content: string): void {}
 
   deleteModel(_path: string): void {}
-
-  getAllModels(): EditorFile[] {
-    return []
-  }
 
   detectLanguage(path: string): FileLanguage {
     const extension = path.substring(path.lastIndexOf('.')).toLowerCase()

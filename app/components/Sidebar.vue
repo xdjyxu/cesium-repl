@@ -3,7 +3,7 @@
  * VSCode 风格的侧边栏
  * 提供 Gallery 和 Editor 视图切换
  */
-export type SidebarView = 'gallery' | 'editor'
+export type SidebarView = 'gallery' | 'files' | 'editor'
 
 interface Props {
   activeView?: SidebarView
@@ -20,6 +20,7 @@ const emit = defineEmits<{
 const views = [
   { id: 'gallery' as const, icon: 'i-carbon-grid', label: 'Gallery' },
   { id: 'editor' as const, icon: 'i-carbon-code', label: 'Editor' },
+  { id: 'files' as const, icon: 'i-carbon-folder', label: 'Explorer' },
 ]
 
 const isSettingsOpen = ref(false)
