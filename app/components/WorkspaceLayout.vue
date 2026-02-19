@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { SidebarView } from '~/components/Sidebar.vue'
 
-defineProps<{
+const props = defineProps<{
   /**
    * 文件系统加载状态
    */
@@ -9,6 +9,9 @@ defineProps<{
 }>()
 
 const activeView = ref<SidebarView>('editor')
+
+// 集成自动编译功能
+const { compiledCode } = useAutoCompile(toRef(() => props.fsLoading ?? false))
 
 function handleSelectFile(_path: string) {
   activeView.value = 'editor'
@@ -59,7 +62,10 @@ function handleSelectFile(_path: string) {
 
       <template #second>
         <!-- 右侧预览区域（独立，不受 header 影响） -->
-        <PreviewPanel />
+        <PreviewPanel
+          :code="compiledCode?.code"
+          :html="compiledCode?.html"
+        />
       </template>
     </SplitPane>
   </div>

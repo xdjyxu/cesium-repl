@@ -1,7 +1,7 @@
 import type { DeepReadonly, Ref } from 'vue'
 import type { SandcastleShareData } from './shareService/common/protocol'
 import { useEditorService } from './editorService/browser/useEditorService'
-// import { useFileService } from './fileService/common/useFileService'
+import { useFileService } from './fileService/common/useFileService'
 import { useShareService } from './shareService/common/useShareService'
 import { useTabService } from './tabService/common/useTabService'
 
@@ -84,7 +84,7 @@ export interface ExampleLoaderReturn {
  * ```
  */
 export function useExampleLoader(): ExampleLoaderReturn {
-  // const fileService = useFileService()
+  const fileService = useFileService()
   const editorService = useEditorService()
   const shareService = useShareService()
   const tabService = useTabService()
@@ -153,7 +153,7 @@ export function useExampleLoader(): ExampleLoaderReturn {
     await Promise.all(
       state.files.map(async (file) => {
         try {
-          // await fileService.unlink(file.path)
+          await fileService.unlink(file.path)
         }
         catch (err) {
           // 文件可能不存在，忽略错误
@@ -180,7 +180,7 @@ export function useExampleLoader(): ExampleLoaderReturn {
       await Promise.all(
         files.map(async (file) => {
           // 写入到虚拟文件系统
-          // await fileService.writeFile(file.path, file.content)
+          await fileService.writeFile(file.path, file.content)
 
           // 创建 Monaco 编辑器模型（根据文件扩展名自动检测语言）
           await editorService.createOrGetModel(file.path, file.content)

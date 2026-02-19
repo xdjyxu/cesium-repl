@@ -42,7 +42,7 @@ export default defineTransformer({
             const language = languageMap[ext] || ext.slice(1)
 
             return {
-              path: entry.name,
+              path: `/${entry.name}`,
               content: fileContent,
               language,
             }

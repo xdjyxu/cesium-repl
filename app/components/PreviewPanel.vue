@@ -3,6 +3,17 @@
  * 预览面板
  * 显示编译后的代码运行结果
  */
+defineProps<{
+  /**
+   * JavaScript 代码
+   */
+  code?: string | null
+  /**
+   * HTML 代码
+   */
+  html?: string | null
+}>()
+
 const isConsoleOpen = ref(false)
 const consoleHeight = ref(200)
 
@@ -16,9 +27,23 @@ function toggleConsole() {
     <!-- 预览内容 -->
     <div class="flex flex-1 flex-col overflow-hidden">
       <!-- 预览区域 -->
-      <div class="flex-1 bg-white">
-        <div class="h-full w-full flex items-center justify-center text-gray-400">
+      <div class="flex-1 overflow-auto bg-white">
+        <div v-if="!code && !html" class="h-full w-full flex items-center justify-center text-gray-400">
           Preview area - Cesium viewer will be rendered here
+        </div>
+        <div v-else class="h-full p-4">
+          <div v-if="html" class="mb-4">
+            <h3 class="mb-2 text-sm text-gray-700 font-semibold">
+              HTML:
+            </h3>
+            <pre class="overflow-auto rounded bg-gray-100 p-3 text-xs"><code>{{ html }}</code></pre>
+          </div>
+          <div v-if="code">
+            <h3 class="mb-2 text-sm text-gray-700 font-semibold">
+              Compiled JavaScript:
+            </h3>
+            <pre class="overflow-auto rounded bg-gray-100 p-3 text-xs"><code>{{ code }}</code></pre>
+          </div>
         </div>
       </div>
     </div>

@@ -53,7 +53,11 @@ export class FileServiceImpl implements FileService {
     const encoding = options?.encoding ?? undefined
     const flag = typeof options?.flag === 'string' ? options.flag : undefined
 
-    const data = await this.#fs.promises.readFile(path, { encoding, flag })
+    const fsOptions = {
+      encoding,
+      ...(flag !== undefined && { flag }),
+    }
+    const data = await this.#fs.promises.readFile(path, fsOptions)
     if (typeof data === 'string') {
       if (encoding === undefined) {
         return this.#encoder.encode(data)
