@@ -34,13 +34,7 @@ export default defineNuxtConfig({
       link: [
         // Monaco Editor CSS 将由 @monaco-editor/loader 动态加载
       ],
-      script: [
-        // Cesium
-        {
-          src: 'https://cdn.jsdelivr.net/npm/cesium@1.137.0/Build/Cesium/Cesium.js',
-          defer: true,
-        },
-      ],
+      // Cesium 在 sandcastle 页面动态加载
     },
   },
   // 禁用 SSR - Cesium REPL 是纯客户端应用

@@ -2,8 +2,12 @@
 /**
  * 预览面板
  * 显示编译后的代码运行结果
+ * 使用 iframe 沙箱执行代码并捕获控制台输出
  */
-defineProps<{
+
+import type { SandcastleShareData } from '~/composables/shareService/common/protocol'
+
+const props = defineProps<{
   /**
    * JavaScript 代码
    */
@@ -16,34 +20,171 @@ defineProps<{
 
 const isConsoleOpen = ref(false)
 const consoleHeight = ref(200)
+const iframeRef = ref<HTMLIFrameElement>()
+const iframeReady = ref(false)
 
+/**
+ * 控制台日志条目
+ */
+interface ConsoleEntry {
+  id: number
+  level: 'log' | 'error' | 'warn'
+  message: string
+  timestamp: Date
+  lineNumber?: number
+}
+
+const consoleEntries = ref<ConsoleEntry[]>([])
+let entryIdCounter = 0
+
+/**
+ * 添加控制台日志
+ */
+function addConsoleEntry(level: 'log' | 'error' | 'warn', message: string, lineNumber?: number) {
+  consoleEntries.value.push({
+    id: entryIdCounter++,
+    level,
+    message,
+    timestamp: new Date(),
+    lineNumber,
+  })
+
+  // 自动打开控制台（如果有错误）
+  if (level === 'error' && !isConsoleOpen.value) {
+    isConsoleOpen.value = true
+  }
+}
+
+/**
+ * 清空控制台
+ */
+function clearConsole() {
+  consoleEntries.value = []
+}
+
+/**
+ * 切换控制台显示
+ */
 function toggleConsole() {
   isConsoleOpen.value = !isConsoleOpen.value
 }
+
+/**
+ * 监听来自 iframe 的消息
+ */
+function handleMessage(event: MessageEvent) {
+  // 验证消息来源
+  if (event.source !== iframeRef.value?.contentWindow) {
+    return
+  }
+
+  const { type, level, message, lineNumber } = event.data
+
+  switch (type) {
+    case 'ready':
+      iframeReady.value = true
+      // iframe 准备就绪后，发送代码
+      sendCodeToIframe()
+      break
+
+    case 'log':
+      addConsoleEntry(level || 'log', message, lineNumber)
+      break
+
+    case 'error':
+      addConsoleEntry('error', message, lineNumber)
+      break
+
+    case 'reload':
+      // 代码已重新加载
+      break
+
+    case 'finished':
+      // 加载完成
+      addConsoleEntry('log', '✓ Code execution completed')
+      break
+  }
+}
+
+/**
+ * 发送代码到 iframe 执行
+ */
+function sendCodeToIframe() {
+  if (!iframeReady.value || !iframeRef.value?.contentWindow) {
+    return
+  }
+
+  // 清空控制台
+  clearConsole()
+
+  const payload: SandcastleShareData = {
+    code: props.code || '',
+    html: props.html || '',
+  }
+
+  iframeRef.value.contentWindow.postMessage({
+    type: 'execute',
+    payload,
+  }, '*')
+}
+
+/**
+ * 格式化时间戳
+ */
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString('en-US', { hour12: false })
+}
+
+/**
+ * 获取控制台条目的样式类
+ */
+function getEntryClass(level: string): string {
+  switch (level) {
+    case 'error':
+      return 'text-red-400'
+    case 'warn':
+      return 'text-yellow-400'
+    default:
+      return 'text-gray-300'
+  }
+}
+
+// 监听 iframe 消息
+onMounted(() => {
+  window.addEventListener('message', handleMessage)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('message', handleMessage)
+})
+
+// 当代码更新时，发送到 iframe
+watch(() => [props.code, props.html] as const, () => {
+  if (iframeReady.value) {
+    sendCodeToIframe()
+  }
+}, { deep: true })
 </script>
 
 <template>
   <div class="h-full w-full flex flex-col bg-gray-900">
     <!-- 预览内容 -->
     <div class="flex flex-1 flex-col overflow-hidden">
-      <!-- 预览区域 -->
-      <div class="flex-1 overflow-auto bg-white">
-        <div v-if="!code && !html" class="h-full w-full flex items-center justify-center text-gray-400">
+      <!-- iframe 沙箱 -->
+      <div class="relative flex-1 overflow-hidden bg-white">
+        <ClientOnly>
+          <iframe
+            ref="iframeRef"
+            src="/Sandcastle"
+            class="h-full w-full border-none"
+            title="Cesium Sandbox"
+          />
+        </ClientOnly>
+        <div
+          v-if="!code && !html"
+          class="pointer-events-none absolute inset-0 flex items-center justify-center bg-white text-gray-400"
+        >
           Preview area - Cesium viewer will be rendered here
-        </div>
-        <div v-else class="h-full p-4">
-          <div v-if="html" class="mb-4">
-            <h3 class="mb-2 text-sm text-gray-700 font-semibold">
-              HTML:
-            </h3>
-            <pre class="overflow-auto rounded bg-gray-100 p-3 text-xs"><code>{{ html }}</code></pre>
-          </div>
-          <div v-if="code">
-            <h3 class="mb-2 text-sm text-gray-700 font-semibold">
-              Compiled JavaScript:
-            </h3>
-            <pre class="overflow-auto rounded bg-gray-100 p-3 text-xs"><code>{{ code }}</code></pre>
-          </div>
         </div>
       </div>
     </div>
@@ -66,21 +207,58 @@ function toggleConsole() {
             ]"
           />
           <span class="text-sm text-gray-200">Console</span>
+          <span
+            v-if="consoleEntries.length > 0"
+            class="rounded-full bg-gray-700 px-2 py-0.5 text-xs text-gray-300"
+          >
+            {{ consoleEntries.length }}
+          </span>
         </div>
         <button
           v-if="isConsoleOpen"
           class="h-7 w-7 flex items-center justify-center rounded bg-transparent text-red-500 transition-colors hover:bg-red-500/20 hover:text-red-400"
           title="Clear console"
-          @click.stop
+          @click.stop="clearConsole"
         >
           <div class="i-carbon-trash-can text-base" />
         </button>
       </div>
 
       <!-- Console 内容 -->
-      <div v-if="isConsoleOpen" class="h-[calc(100%-32px)] overflow-y-auto p-2 text-xs font-mono">
-        <div class="text-gray-400">
+      <div
+        v-if="isConsoleOpen"
+        class="h-[calc(100%-32px)] overflow-y-auto p-2 text-xs font-mono"
+      >
+        <div v-if="consoleEntries.length === 0" class="text-gray-500">
           Console output will appear here...
+        </div>
+        <div
+          v-for="entry in consoleEntries"
+          :key="entry.id"
+          class="mb-1 flex items-start gap-2 border-b border-gray-800 pb-1"
+        >
+          <!-- 时间戳 -->
+          <span class="shrink-0 text-gray-600">
+            {{ formatTime(entry.timestamp) }}
+          </span>
+
+          <!-- 级别图标 -->
+          <span class="shrink-0">
+            <span v-if="entry.level === 'error'" class="text-red-500">✖</span>
+            <span v-else-if="entry.level === 'warn'" class="text-yellow-500">⚠</span>
+            <span v-else class="text-blue-500">ℹ</span>
+          </span>
+
+          <!-- 消息内容 -->
+          <pre
+            class="flex-1 whitespace-pre-wrap break-all"
+            :class="getEntryClass(entry.level)"
+          >{{ entry.message }}</pre>
+
+          <!-- 行号（如果有） -->
+          <span v-if="entry.lineNumber" class="shrink-0 text-xs text-gray-600">
+            :{{ entry.lineNumber }}
+          </span>
         </div>
       </div>
     </div>

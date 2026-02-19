@@ -1,17 +1,13 @@
 <script setup lang="ts">
 import type { SidebarView } from '~/components/Sidebar.vue'
 
-const props = defineProps<{
-  /**
-   * 文件系统加载状态
-   */
-  fsLoading?: boolean
-}>()
-
 const activeView = ref<SidebarView>('editor')
 
+// 加载示例（依赖 fileService，必须在 provide 的子组件中调用）
+const { state } = useExampleLoader()
+
 // 集成自动编译功能
-const { compiledCode } = useAutoCompile(toRef(() => props.fsLoading ?? false))
+const { compiledCode } = useAutoCompile(toRef(() => state.loading))
 
 function handleSelectFile(_path: string) {
   activeView.value = 'editor'

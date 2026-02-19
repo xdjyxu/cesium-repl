@@ -73,6 +73,7 @@ export function useAutoCompile(fsLoading: Ref<boolean>): AutoCompileResult {
       const rollupOptions = {
         input: '/main.js',
         fs: fileService,
+        external: ['cesium', 'Sandcastle'],
         plugins: [
           // 文件加载插件：从 fileService 读取文件内容
           {
@@ -98,6 +99,12 @@ export function useAutoCompile(fsLoading: Ref<boolean>): AutoCompileResult {
         output: {
           format: 'iife' as const,
           name: 'CesiumApp',
+          // 将外部模块映射到全局变量，使 IIFE 正确引用 CDN 加载的全局对象
+          globals: {
+            cesium: 'Cesium',
+            Cesium: 'Cesium',
+            Sandcastle: 'Sandcastle',
+          },
         },
       }
 
