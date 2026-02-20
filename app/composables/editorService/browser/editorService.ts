@@ -1,5 +1,6 @@
 import type * as monaco from 'monaco-editor'
 import type { EditorService, FileLanguage, ModelContentChangeEvent } from '../common/protocol'
+import CESIUM_MODULE_DECLARATION from 'cesium/Source/Cesium.d.ts?raw'
 import { BehaviorSubject, Subject } from 'rxjs'
 import { SANDCASTLE_MODULE_DECLARATION } from '~/utils/sandcastle'
 import { Autowired, PostInject } from '../../inject'
@@ -62,6 +63,7 @@ export class EditorServiceImpl implements EditorService {
   async initialize(): Promise<void> {
     this._monaco = await this._monacoLoader.getMonaco()
     this._injectSandcastleTypes(this._monaco)
+    this._injectCesiumTypes(this._monaco)
   }
 
   /**
@@ -76,6 +78,22 @@ export class EditorServiceImpl implements EditorService {
     )
     monacoInstance.typescript.javascriptDefaults.addExtraLib(
       SANDCASTLE_MODULE_DECLARATION,
+      libUri,
+    )
+  }
+
+  /**
+   * 向 Monaco TypeScript/JavaScript 语言服务注入 Cesium 模块类型
+   * 注入后用户代码可通过 `import * as Cesium from 'cesium'` 获得完整的类型提示
+   */
+  private _injectCesiumTypes(monacoInstance: typeof monaco): void {
+    const libUri = 'file:///node_modules/cesium/Source/Cesium.d.ts'
+    monacoInstance.typescript.typescriptDefaults.addExtraLib(
+      CESIUM_MODULE_DECLARATION,
+      libUri,
+    )
+    monacoInstance.typescript.javascriptDefaults.addExtraLib(
+      CESIUM_MODULE_DECLARATION,
       libUri,
     )
   }
