@@ -1,6 +1,7 @@
 import type * as monaco from 'monaco-editor'
 import type { EditorService, FileLanguage, ModelContentChangeEvent } from '../common/protocol'
 import { BehaviorSubject, Subject } from 'rxjs'
+import { SANDCASTLE_MODULE_DECLARATION } from '~/utils/sandcastle'
 import { Autowired, PostInject } from '../../inject'
 import { MonacoLoaderService } from '../../monacoLoaderService/common/protocol'
 import {
@@ -55,11 +56,28 @@ export class EditorServiceImpl implements EditorService {
 
   /**
    * 初始化方法，在依赖注入后自动执行
-   * 等待 Monaco Editor 加载完成
+   * 等待 Monaco Editor 加载完成，并注入 Sandcastle 类型声明
    */
   @PostInject
   async initialize(): Promise<void> {
     this._monaco = await this._monacoLoader.getMonaco()
+    this._injectSandcastleTypes(this._monaco)
+  }
+
+  /**
+   * 向 Monaco TypeScript/JavaScript 语言服务注入 Sandcastle 模块类型
+   * 注入后用户代码可通过 `import * as Sandcastle from 'Sandcastle'` 获得完整的类型提示
+   */
+  private _injectSandcastleTypes(monacoInstance: typeof monaco): void {
+    const libUri = 'file:///node_modules/@types/sandcastle/index.d.ts'
+    monacoInstance.typescript.typescriptDefaults.addExtraLib(
+      SANDCASTLE_MODULE_DECLARATION,
+      libUri,
+    )
+    monacoInstance.typescript.javascriptDefaults.addExtraLib(
+      SANDCASTLE_MODULE_DECLARATION,
+      libUri,
+    )
   }
 
   /**
@@ -78,6 +96,15 @@ export class EditorServiceImpl implements EditorService {
 
     await this._initializePromise
     return this._monaco!
+  }
+
+  /**
+   * 将文件路径规范化为 Monaco file URI
+   * 去除前导斜杠，防止生成 file:////path 形式的非法 URI（Monaco 会抛出 UriError）
+   * 例如：'/main.js' → 'file:///main.js'，而非 'file:////main.js'
+   */
+  private _pathToUri(monacoInstance: { Uri: typeof monaco.Uri }, path: string): monaco.Uri {
+    return monacoInstance.Uri.parse(`file:///${path.replace(/^\/+/, '')}`)
   }
 
   /**
@@ -127,7 +154,7 @@ export class EditorServiceImpl implements EditorService {
     language?: FileLanguage,
   ): Promise<monaco.editor.ITextModel> {
     const monaco = await this._ensureMonaco()
-    const uri = monaco.Uri.parse(`file:///${path}`)
+    const uri = this._pathToUri(monaco, path)
 
     // 尝试获取已存在的 model
     let model = monaco.editor.getModel(uri)
@@ -167,7 +194,7 @@ export class EditorServiceImpl implements EditorService {
     if (!this._monaco) {
       return null
     }
-    const uri = this._monaco.Uri.parse(`file:///${path}`)
+    const uri = this._pathToUri(this._monaco, path)
     return this._monaco.editor.getModel(uri)
   }
 

@@ -6,6 +6,7 @@
  */
 
 import type { SandcastleShareData } from '~/composables/shareService/common/protocol'
+import { useParentTransport } from '~/composables/useTransport'
 
 const props = defineProps<{
   /**
@@ -22,6 +23,7 @@ const isConsoleOpen = ref(false)
 const consoleHeight = ref(200)
 const iframeRef = ref<HTMLIFrameElement>()
 const iframeReady = ref(false)
+const transport = useParentTransport(iframeRef)
 
 /**
  * 控制台日志条目
@@ -37,9 +39,6 @@ interface ConsoleEntry {
 const consoleEntries = ref<ConsoleEntry[]>([])
 let entryIdCounter = 0
 
-/**
- * 添加控制台日志
- */
 function addConsoleEntry(level: 'log' | 'error' | 'warn', message: string, lineNumber?: number) {
   consoleEntries.value.push({
     id: entryIdCounter++,
@@ -49,72 +48,25 @@ function addConsoleEntry(level: 'log' | 'error' | 'warn', message: string, lineN
     lineNumber,
   })
 
-  // 自动打开控制台（如果有错误）
-  if (level === 'error' && !isConsoleOpen.value) {
+  if (level === 'error' && !isConsoleOpen.value)
     isConsoleOpen.value = true
-  }
 }
 
-/**
- * 清空控制台
- */
 function clearConsole() {
   consoleEntries.value = []
 }
 
-/**
- * 切换控制台显示
- */
 function toggleConsole() {
   isConsoleOpen.value = !isConsoleOpen.value
-}
-
-/**
- * 监听来自 iframe 的消息
- */
-function handleMessage(event: MessageEvent) {
-  // 验证消息来源
-  if (event.source !== iframeRef.value?.contentWindow) {
-    return
-  }
-
-  const { type, level, message, lineNumber } = event.data
-
-  switch (type) {
-    case 'ready':
-      iframeReady.value = true
-      // iframe 准备就绪后，发送代码
-      sendCodeToIframe()
-      break
-
-    case 'log':
-      addConsoleEntry(level || 'log', message, lineNumber)
-      break
-
-    case 'error':
-      addConsoleEntry('error', message, lineNumber)
-      break
-
-    case 'reload':
-      // 代码已重新加载
-      break
-
-    case 'finished':
-      // 加载完成
-      addConsoleEntry('log', '✓ Code execution completed')
-      break
-  }
 }
 
 /**
  * 发送代码到 iframe 执行
  */
 function sendCodeToIframe() {
-  if (!iframeReady.value || !iframeRef.value?.contentWindow) {
+  if (!iframeReady.value)
     return
-  }
 
-  // 清空控制台
   clearConsole()
 
   const payload: SandcastleShareData = {
@@ -122,10 +74,7 @@ function sendCodeToIframe() {
     html: props.html || '',
   }
 
-  iframeRef.value.contentWindow.postMessage({
-    type: 'execute',
-    payload,
-  }, '*')
+  transport.value?.write({ type: 'execute', payload })
 }
 
 /**
@@ -140,29 +89,44 @@ function formatTime(date: Date): string {
  */
 function getEntryClass(level: string): string {
   switch (level) {
-    case 'error':
-      return 'text-red-400'
-    case 'warn':
-      return 'text-yellow-400'
-    default:
-      return 'text-gray-300'
+    case 'error': return 'text-red-400'
+    case 'warn': return 'text-yellow-400'
+    default: return 'text-gray-300'
   }
 }
 
-// 监听 iframe 消息
-onMounted(() => {
-  window.addEventListener('message', handleMessage)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('message', handleMessage)
-})
+// 监听来自 iframe 的消息（仅处理来自沙箱 iframe 的消息）
+watch(transport, (t, _old, onCleanup) => {
+  if (!t)
+    return
+  const controller = new AbortController()
+  ;(async () => {
+    for await (const data of t.read({ signal: controller.signal })) {
+      switch (data.type) {
+        case 'ready':
+          iframeReady.value = true
+          sendCodeToIframe()
+          break
+        case 'log':
+          addConsoleEntry(data.level, data.message)
+          break
+        case 'error':
+          addConsoleEntry('error', data.message, data.lineNumber)
+          break
+        case 'reload':
+        case 'highlight':
+          // 暂不处理
+          break
+      }
+    }
+  })()
+  onCleanup(() => controller.abort())
+}, { immediate: true })
 
 // 当代码更新时，发送到 iframe
 watch(() => [props.code, props.html] as const, () => {
-  if (iframeReady.value) {
+  if (iframeReady.value)
     sendCodeToIframe()
-  }
 }, { deep: true })
 </script>
 
