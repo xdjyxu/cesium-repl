@@ -48,12 +48,27 @@ export interface CreateSandcastleAPIOptions {
   postToParent: (msg: SandboxToParentMessage) => void
 }
 
-export function createSandcastleAPI({ onLoadingChange, postToParent }: CreateSandcastleAPIOptions): SandcastleAPI {
+export interface SandcastleRuntime {
+  api: SandcastleAPI
+  /** 清空 toolbar 并显示 loading，仅供执行新代码前调用 */
+  clearUI: () => void
+}
+
+export function createSandcastleAPI({ onLoadingChange, postToParent }: CreateSandcastleAPIOptions): SandcastleRuntime {
   const registered = new Map<any, number>()
   let defaultAction: (() => void) | undefined
 
   function getToolbar(toolbarId?: string): HTMLElement | null {
     return document.getElementById(toolbarId ?? 'toolbar')
+  }
+
+  function clearUI() {
+    const toolbar = document.getElementById('toolbar')
+    if (toolbar)
+      toolbar.innerHTML = ''
+    onLoadingChange(true)
+    registered.clear()
+    defaultAction = undefined
   }
 
   const api: SandcastleAPI = {
@@ -96,7 +111,6 @@ export function createSandcastleAPI({ onLoadingChange, postToParent }: CreateSan
     },
 
     finishedLoading() {
-      api.reset()
       onLoadingChange(false)
       if (defaultAction) {
         api.highlight(defaultAction)
@@ -113,7 +127,7 @@ export function createSandcastleAPI({ onLoadingChange, postToParent }: CreateSan
 
       const button = document.createElement('button')
       button.type = 'button'
-      button.className = 'cesium-button'
+      button.className = 'stratakit-mimic-button'
       button.textContent = text
       button.onclick = () => {
         api.reset()
@@ -129,26 +143,27 @@ export function createSandcastleAPI({ onLoadingChange, postToParent }: CreateSan
       if (!toolbar)
         return
 
+      const id = `toggle-${Math.random().toString(36).slice(2)}`
+
       const checkbox = document.createElement('input')
       checkbox.type = 'checkbox'
+      checkbox.className = 'stratakit-mimic-switch'
       checkbox.checked = checked
-      checkbox.style.pointerEvents = 'none'
-
-      const label = document.createElement('label')
-      label.style.pointerEvents = 'none'
-      label.textContent = ` ${text}`
-
-      const field = document.createElement('div')
-      field.className = 'cesium-button'
-      field.appendChild(checkbox)
-      field.appendChild(label)
-
-      field.onclick = () => {
-        api.reset()
+      checkbox.id = id
+      checkbox.onchange = () => {
         api.highlight(onchange)
-        checkbox.checked = !checkbox.checked
         onchange(checkbox.checked)
       }
+
+      const label = document.createElement('label')
+      label.className = 'stratakit-mimic-label'
+      label.htmlFor = id
+      label.textContent = text
+
+      const field = document.createElement('div')
+      field.className = 'stratakit-mimic-field'
+      field.appendChild(checkbox)
+      field.appendChild(label)
 
       toolbar.appendChild(field)
     },
@@ -159,7 +174,7 @@ export function createSandcastleAPI({ onLoadingChange, postToParent }: CreateSan
         return
 
       const select = document.createElement('select')
-      select.className = 'cesium-button'
+      select.className = 'stratakit-mimic-button stratakit-mimic-select'
 
       for (const [index, option] of options.entries()) {
         api.declare(option.onselect)
@@ -176,7 +191,10 @@ export function createSandcastleAPI({ onLoadingChange, postToParent }: CreateSan
           item.onselect()
       }
 
-      toolbar.appendChild(select)
+      const root = document.createElement('div')
+      root.className = 'stratakit-mimic-select-root'
+      root.appendChild(select)
+      toolbar.appendChild(root)
 
       if (!defaultAction && options[0]?.onselect)
         defaultAction = options[0].onselect
@@ -194,16 +212,11 @@ export function createSandcastleAPI({ onLoadingChange, postToParent }: CreateSan
     },
 
     reset() {
-      const toolbar = document.getElementById('toolbar')
-      if (toolbar)
-        toolbar.innerHTML = ''
-      onLoadingChange(true)
-      registered.clear()
-      defaultAction = undefined
+      // no-op by default — user code can override this to reset Cesium viewer state
     },
   }
 
-  return api
+  return { api, clearUI }
 }
 
 // #endregion

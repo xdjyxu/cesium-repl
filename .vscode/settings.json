@@ -48,5 +48,6 @@
     "pcss",
     "postcss"
   ],
+  "cSpell.ignoreWords": ["vueuse"],
   "typescript.tsdk": "node_modules/typescript/lib"
 }

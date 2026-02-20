@@ -31,6 +31,9 @@ declare module 'Sandcastle' {
   export function addDefaultToolbarButton(text: string, onclick: () => void, toolbarId?: string): void
   export function addDefaultToolbarMenu(options: SelectOption[], toolbarId?: string): void
 
-  /** Clear toolbar and reset execution state (called before each code run). */
+  /**
+   * No-op by default. Override in user code to reset Cesium viewer state
+   * (e.g. remove entities, reset camera) between toolbar button actions.
+   */
   export function reset(): void
 }
