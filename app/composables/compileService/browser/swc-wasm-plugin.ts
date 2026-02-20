@@ -11,7 +11,7 @@ import { merge } from 'smob'
  */
 export function swcWasm(input: SwcWasmPluginOptions = {}): Plugin {
   const filter = createFilter(
-    input.include ?? [/\.[mc]?[jt]sx?$/],
+    input.include ?? [/\.[mc]?tsx?$/],
     input.exclude ?? [/node_modules/],
   )
 
