@@ -48,6 +48,6 @@
     "pcss",
     "postcss"
   ],
-  "cSpell.ignoreWords": ["vueuse"],
+  "cSpell.ignoreWords": ["vueuse", "stratakit"],
   "typescript.tsdk": "node_modules/typescript/lib"
 }

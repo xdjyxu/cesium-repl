@@ -9,7 +9,7 @@
  * sandcastle.d.ts imported via Vite's `?raw` suffix.
  */
 
-import type * as SandcastleModule from 'Sandcastle'
+import type SandcastleModule from 'Sandcastle'
 import type { SandboxToParentMessage } from './transport'
 // Vite raw import — the string content of sandcastle.d.ts, used by Monaco addExtraLib
 import SANDCASTLE_MODULE_DECLARATION from './sandcastle.d.ts?raw'
@@ -29,7 +29,7 @@ export const TEMPLATE_HEADER_LINES = 3
 // #region Types
 
 /** Alias for the Sandcastle module's SelectOption — imported from sandcastle.d.ts. */
-export type SelectOption = SandcastleModule.SelectOption
+export type { SelectOption } from 'Sandcastle'
 
 /**
  * The runtime API shape, derived from the module declaration in sandcastle.d.ts.
