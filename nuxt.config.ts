@@ -26,6 +26,7 @@ export default defineNuxtConfig({
     build: {
       transformers: [
         '~~/transformers/example-folder',
+        '~~/transformers/example-file',
       ],
     },
   },

@@ -48,7 +48,7 @@ export function useGalleryCollection(label?: MaybeRefOrGetter<string>) {
 }
 
 /**
- * 获取单个示例的详细信息
+ * 获取单个示例的详细信息（合并 examples 元数据 + exampleFiles 源文件）
  *
  * @param exampleId - 示例的 ID（如 'hello-world', 'custom-ui'）
  * @returns 示例数据的响应式引用
@@ -56,10 +56,20 @@ export function useGalleryCollection(label?: MaybeRefOrGetter<string>) {
 export function useGallery(exampleId: MaybeRefOrGetter<string>) {
   const id = toRef(exampleId)
 
-  const { data: example } = useAsyncData(
+  const { data } = useAsyncData(
     () => `example:${id.value}`,
-    () => queryCollection('examples').where('slug', '=', id.value).first(),
+    async () => {
+      const [example, files] = await Promise.all([
+        queryCollection('examples').where('slug', '=', id.value).first(),
+        queryCollection('exampleFiles').where('exampleSlug', '=', id.value).all(),
+      ])
+      if (!example) return null
+      return {
+        ...example,
+        files: files.map(({ path, content, language }) => ({ path, content, language })),
+      }
+    },
   )
 
-  return example
+  return data
 }
