@@ -63,7 +63,8 @@ export function useGallery(exampleId: MaybeRefOrGetter<string>) {
         queryCollection('examples').where('slug', '=', id.value).first(),
         queryCollection('exampleFiles').where('exampleSlug', '=', id.value).all(),
       ])
-      if (!example) return null
+      if (!example)
+        return null
       return {
         ...example,
         files: files.map(({ path, content, language }) => ({ path, content, language })),

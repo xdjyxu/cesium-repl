@@ -78,7 +78,7 @@ class MessageQueue<T> {
       w.resolve({ value: undefined as unknown as T, done: true })
   }
 
-  async *[Symbol.asyncIterator](signal?: AbortSignal): AsyncGenerator<T> {
+  async* [Symbol.asyncIterator](signal?: AbortSignal): AsyncGenerator<T> {
     while (true) {
       if (signal?.aborted)
         return

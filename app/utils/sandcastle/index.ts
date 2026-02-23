@@ -26,6 +26,33 @@ export const TEMPLATE_HEADER_LINES = 3
 
 // #endregion
 
+// #region Code template
+
+/**
+ * Wraps user code in the Sandcastle startup template.
+ * The template header occupies `TEMPLATE_HEADER_LINES` lines before user code,
+ * so raw script line numbers need that offset subtracted for accurate editor highlighting.
+ */
+export function wrapCodeInTemplate(code: string): string {
+  return [
+    'window.startup = async function (Cesium) {',
+    '  \'use strict\';',
+    '  //Sandcastle_Begin',
+    code,
+    '  //Sandcastle_End',
+    '  Sandcastle.finishedLoading();',
+    '};',
+    'if (typeof Cesium !== \'undefined\') {',
+    '  window.startupCalled = true;',
+    '  window.startup(Cesium).catch(function(error) {',
+    '    console.error(error);',
+    '  });',
+    '}',
+  ].join('\n')
+}
+
+// #endregion
+
 // #region Types
 
 /** Alias for the Sandcastle module's SelectOption — imported from sandcastle.d.ts. */

@@ -1,17 +1,16 @@
 <script setup lang="ts">
 /**
- * Cesium Sandcastle 执行环境页面（iframe 模式）
+ * Standalone 页面 — 与 Cesium Sandcastle standalone.html 等价
  *
- * 通过 postMessage transport 接收来自 PreviewPanel 的 execute 消息，
- * 在沙箱化的 Cesium + Sandcastle 环境中执行代码并将结果回传给父窗口。
+ * 从 URL hash `/#c=<compressed>` 中提取分享的代码，解压后直接在
+ * Cesium + Sandcastle 环境中执行，无需 iframe transport 或编辑器。
  *
- * 可复用的执行环境逻辑（Cesium 加载、Sandcastle API、代码执行）
- * 统一由 useCesiumSandbox 组合式函数提供。
+ * 兼容标准 Sandcastle 分享链接格式:
+ *   https://sandcastle.cesium.com/#c=<compressed>
+ *   http://localhost:3000/standalone#c=<compressed>
  */
 
-import { useEventListener } from '@vueuse/core'
-import { useIframeTransport } from '~/composables/useTransport'
-import { TEMPLATE_HEADER_LINES } from '~/utils/sandcastle'
+import { useShareService } from '~/composables/shareService/common/useShareService'
 
 // 禁用布局
 definePageMeta({
@@ -19,10 +18,10 @@ definePageMeta({
 })
 
 useHead({
-  title: 'Cesium Sandbox',
+  title: 'Cesium Demo',
   meta: [
     { charset: 'utf-8' },
-    { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+    { name: 'viewport', content: 'width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no' },
   ],
   link: [
     {
@@ -32,103 +31,29 @@ useHead({
   ],
 })
 
-// #region Transport & sandbox setup
+// #region Execution setup
 
-const transport = useIframeTransport()
-
-const { isCesiumReady, isLoadingOverlayVisible, executeOrQueue } = useCesiumSandbox({
-  postToParent: msg => transport.value?.write(msg),
-})
-
-// #endregion
-
-// #region Console 劫持
-
-// Capture originals at setup time, before any override, to prevent stacking on re-mount
-// eslint-disable-next-line no-console
-const _originalLog = console.log
-const _originalError = console.error
-const _originalWarn = console.warn
-
-function formatArgs(args: any[]): string {
-  return args
-    .map((arg) => {
-      if (typeof arg === 'object' && arg !== null) {
-        try {
-          return JSON.stringify(arg, null, 2)
-        }
-        catch {
-          return String(arg)
-        }
-      }
-      return String(arg)
-    })
-    .join(' ')
-}
+const shareService = useShareService()
+const { isLoadingOverlayVisible, executeOrQueue } = useCesiumSandbox()
 
 onMounted(() => {
-  // eslint-disable-next-line no-console
-  console.log = (...args: any[]) => {
-    _originalLog.apply(console, args)
-    transport.value?.write({ type: 'log', level: 'log', message: formatArgs(args) })
-  }
-  console.error = (...args: any[]) => {
-    _originalError.apply(console, args)
-    transport.value?.write({ type: 'log', level: 'error', message: formatArgs(args) })
-  }
-  console.warn = (...args: any[]) => {
-    _originalWarn.apply(console, args)
-    transport.value?.write({ type: 'log', level: 'warn', message: formatArgs(args) })
-  }
-})
-
-onUnmounted(() => {
-  // eslint-disable-next-line no-console
-  console.log = _originalLog
-  console.error = _originalError
-  console.warn = _originalWarn
-})
-
-// #endregion
-
-// #region 全局错误处理
-
-useEventListener(window, 'error', (event: ErrorEvent) => {
-  const editorLine = event.lineno ? event.lineno - TEMPLATE_HEADER_LINES : undefined
-  transport.value?.write({
-    type: 'error',
-    message: String(event.message),
-    lineNumber: editorLine,
-    stack: event.error?.stack,
-  })
-})
-
-useEventListener(window, 'unhandledrejection', (event: PromiseRejectionEvent) => {
-  transport.value?.write({
-    type: 'error',
-    message: `Unhandled Promise Rejection: ${event.reason}`,
-    stack: event.reason?.stack,
-  })
-})
-
-// #endregion
-
-// #region 消息监听
-
-;(async () => {
-  if (!transport.value)
+  const hash = window.location.hash
+  if (!hash.startsWith('#c='))
     return
-  for await (const data of transport.value.read()) {
-    if (data?.type !== 'execute')
-      continue
 
-    const { payload } = data
-    if (!payload?.code)
-      continue
+  const compressed = hash.slice(3)
 
-    executeOrQueue(payload)
+  let data
+  try {
+    data = shareService.decompress(compressed)
   }
-})()
+  catch (err) {
+    console.error('Failed to decompress share data:', err)
+    return
+  }
+
+  executeOrQueue(data)
+})
 
 // #endregion
 </script>

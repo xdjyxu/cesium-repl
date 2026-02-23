@@ -6,18 +6,12 @@
  */
 
 import type { SandcastleShareData } from '~/composables/shareService/common/protocol'
+import { useObservable } from '@vueuse/rxjs'
+import { useArtifactService } from '~/composables/artifactService/common/useArtifactService'
 import { useParentTransport } from '~/composables/useTransport'
 
-const props = defineProps<{
-  /**
-   * JavaScript 代码
-   */
-  code?: string | null
-  /**
-   * HTML 代码
-   */
-  html?: string | null
-}>()
+const artifactService = useArtifactService()
+const artifact = useObservable(artifactService.artifact$)
 
 const isConsoleOpen = ref(false)
 const consoleHeight = ref(200)
@@ -70,8 +64,8 @@ function sendCodeToIframe() {
   clearConsole()
 
   const payload: SandcastleShareData = {
-    code: props.code || '',
-    html: props.html || '',
+    code: artifact.value?.code || '',
+    html: artifact.value?.html || '',
   }
 
   transport.value?.write({ type: 'execute', payload })
@@ -124,7 +118,7 @@ watch(transport, (t, _old, onCleanup) => {
 }, { immediate: true })
 
 // 当代码更新时，发送到 iframe
-watch(() => [props.code, props.html] as const, () => {
+watch(artifact, () => {
   if (iframeReady.value)
     sendCodeToIframe()
 }, { deep: true })
@@ -145,7 +139,7 @@ watch(() => [props.code, props.html] as const, () => {
           />
         </ClientOnly>
         <div
-          v-if="!code && !html"
+          v-if="!artifact"
           class="pointer-events-none absolute inset-0 flex items-center justify-center bg-white text-gray-400"
         >
           Preview area - Cesium viewer will be rendered here

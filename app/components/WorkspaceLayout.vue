@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { SidebarView } from '~/components/Sidebar.vue'
+import { useArtifactService } from '~/composables/artifactService/common/useArtifactService'
+import { useShareService } from '~/composables/shareService/common/useShareService'
 
 const activeView = ref<SidebarView>('editor')
 
@@ -7,7 +9,18 @@ const activeView = ref<SidebarView>('editor')
 const { state } = useExampleLoader()
 
 // 集成自动编译功能
-const { compiledCode } = useAutoCompile(toRef(() => state.loading))
+useAutoCompile(toRef(() => state.loading))
+
+const artifactService = useArtifactService()
+const shareService = useShareService()
+
+function openStandalone() {
+  const artifact = artifactService.getArtifact()
+  if (!artifact)
+    return
+  const compressed = shareService.compress(artifact)
+  window.open(`/standalone#c=${compressed}`, '_blank')
+}
 
 function handleSelectFile(_path: string) {
   activeView.value = 'editor'
@@ -34,6 +47,7 @@ function handleSelectFile(_path: string) {
               <button
                 class="h-7 rounded bg-gray-800 px-3 text-sm text-gray-400 transition-colors hover:bg-gray-700 hover:text-gray-200"
                 title="Open in standalone window"
+                @click="openStandalone"
               >
                 Standalone
               </button>
@@ -58,10 +72,7 @@ function handleSelectFile(_path: string) {
 
       <template #second>
         <!-- 右侧预览区域（独立，不受 header 影响） -->
-        <PreviewPanel
-          :code="compiledCode?.code"
-          :html="compiledCode?.html"
-        />
+        <PreviewPanel />
       </template>
     </SplitPane>
   </div>

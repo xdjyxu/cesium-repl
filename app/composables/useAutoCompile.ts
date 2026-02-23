@@ -2,6 +2,7 @@ import type { Ref } from 'vue'
 import type { CompileState } from './compileService/common/protocol'
 import type { SandcastleShareData } from './shareService/common/protocol'
 import { useObservable } from '@vueuse/rxjs'
+import { useArtifactService } from './artifactService/common/useArtifactService'
 import { cssInline } from './compileService/browser/css-inline-plugin'
 import { swcWasm } from './compileService/browser/swc-wasm-plugin'
 import { useCompileService } from './compileService/browser/useCompileService'
@@ -95,6 +96,7 @@ async function inlineCssLinks(
 export function useAutoCompile(fsLoading: Ref<boolean>): AutoCompileResult {
   const compileService = useCompileService()
   const fileService = useFileService()
+  const artifactService = useArtifactService()
 
   // 订阅编译状态
   const compileState = useObservable(compileService.state$)
@@ -194,11 +196,13 @@ export function useAutoCompile(fsLoading: Ref<boolean>): AutoCompileResult {
           code: compiledJs,
           html: processedHtml,
         }
+        artifactService.setArtifact(compiledCode.value)
       }
     }
     catch (error) {
       console.error('Compilation failed:', error)
       compiledCode.value = null
+      artifactService.setArtifact(null)
     }
   }
 
