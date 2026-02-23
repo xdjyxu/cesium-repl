@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import type { SidebarView } from '~/components/Sidebar.vue'
-import { useArtifactService } from '~/composables/artifactService/common/useArtifactService'
-import { useShareService } from '~/composables/shareService/common/useShareService'
 
 const activeView = ref<SidebarView>('editor')
 
@@ -11,14 +9,12 @@ const { state } = useExampleLoader()
 // 集成自动编译功能
 useAutoCompile(toRef(() => state.loading))
 
-const artifactService = useArtifactService()
-const shareService = useShareService()
+const { getCompressed } = useShareData()
 
 function openStandalone() {
-  const artifact = artifactService.getArtifact()
-  if (!artifact)
+  const compressed = getCompressed()
+  if (!compressed)
     return
-  const compressed = shareService.compress(artifact)
   window.open(`/standalone#c=${compressed}`, '_blank')
 }
 
@@ -38,12 +34,7 @@ function handleSelectFile(_path: string) {
           <div class="h-10 flex shrink-0 items-center justify-between border-b border-gray-700 bg-gray-800 px-4">
             <span class="text-sm text-gray-200 font-semibold">Cesium REPL</span>
             <div class="flex items-center gap-2">
-              <button
-                class="h-7 rounded bg-gray-800 px-3 text-sm text-gray-400 transition-colors hover:bg-gray-700 hover:text-gray-200"
-                title="Share"
-              >
-                Share
-              </button>
+              <SharePopover />
               <button
                 class="h-7 rounded bg-gray-800 px-3 text-sm text-gray-400 transition-colors hover:bg-gray-700 hover:text-gray-200"
                 title="Open in standalone window"
