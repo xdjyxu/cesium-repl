@@ -24,12 +24,6 @@ useHead({
     { charset: 'utf-8' },
     { name: 'viewport', content: 'width=device-width, initial-scale=1' },
   ],
-  link: [
-    {
-      rel: 'stylesheet',
-      href: 'https://cdn.jsdelivr.net/npm/cesium@1.137.0/Build/Cesium/Widgets/widgets.css',
-    },
-  ],
 })
 
 // #region Transport & sandbox setup

@@ -122,6 +122,10 @@ export function useCesiumSandbox(options: UseCesiumSandboxOptions = {}) {
 
   // #region Cesium loading
 
+  useHead({
+    link: [{ rel: 'stylesheet', href: '/lib/cesium/Widgets/widgets.css' }],
+  })
+
   function pollForCesium() {
     if (typeof window.Cesium !== 'undefined') {
       isCesiumReady.value = true
@@ -138,7 +142,7 @@ export function useCesiumSandbox(options: UseCesiumSandboxOptions = {}) {
   }
 
   const { load } = useScriptTag(
-    'https://cdn.jsdelivr.net/npm/cesium@1.137.0/Build/Cesium/Cesium.js',
+    '/lib/cesium/Cesium.js',
     () => pollForCesium(),
     { manual: true, async: true },
   )
