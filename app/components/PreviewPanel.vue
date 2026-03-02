@@ -18,6 +18,7 @@ const consoleHeight = ref(200)
 const iframeRef = ref<HTMLIFrameElement>()
 const iframeReady = ref(false)
 const transport = useParentTransport(iframeRef)
+const pendingPayload = ref<SandcastleShareData | null>(null)
 
 /**
  * 控制台日志条目
@@ -58,17 +59,26 @@ function toggleConsole() {
  * 发送代码到 iframe 执行
  */
 function sendCodeToIframe() {
-  if (!iframeReady.value)
+  if (!iframeReady.value || !iframeRef.value?.contentWindow)
     return
 
   clearConsole()
 
+  // 创建纯对象以避免 postMessage 克隆错误
   const payload: SandcastleShareData = {
     code: artifact.value?.code || '',
     html: artifact.value?.html || '',
   }
 
-  transport.value?.write({ type: 'execute', payload })
+  // 重新加载 iframe 以清空模块缓存（模拟 Cesium Sandcastle 行为）
+  // iframe 加载完成后会发送 'ready' 消息，触发代码注入
+  iframeReady.value = false
+  iframeRef.value.contentWindow.location.reload()
+
+  // 等待 iframe 重新加载后发送代码
+  // 'ready' 消息处理器会调用 sendCodeToIframe，但此时 iframeReady 已经是 true
+  // 为了避免无限循环，我们需要在 ready 处理器中检查是否有待发送的代码
+  pendingPayload.value = payload
 }
 
 /**
@@ -99,7 +109,23 @@ watch(transport, (t, _old, onCleanup) => {
       switch (data.type) {
         case 'ready':
           iframeReady.value = true
-          sendCodeToIframe()
+          // 如果有待发送的代码，立即发送
+          if (pendingPayload.value) {
+            // 使用 toRaw 移除响应式代理，确保对象可以被 postMessage 克隆
+            transport.value?.write({ type: 'execute', payload: toRaw(pendingPayload.value) })
+            pendingPayload.value = null
+          }
+          // 初次加载时，如果有 artifact，也发送
+          else if (artifact.value) {
+            // 使用 toRaw 移除响应式代理
+            transport.value?.write({
+              type: 'execute',
+              payload: toRaw({
+                code: artifact.value.code || '',
+                html: artifact.value.html || '',
+              }),
+            })
+          }
           break
         case 'log':
           addConsoleEntry(data.level, data.message)

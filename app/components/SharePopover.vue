@@ -84,7 +84,7 @@ onUnmounted(() => {
       <!-- Popover panel -->
       <div
         v-if="isOpen"
-        class="fixed z-50 w-96 rounded-lg border border-gray-600 bg-gray-800 p-4 shadow-xl"
+        class="fixed z-50 w-96 border border-gray-600 rounded-lg bg-gray-800 p-4 shadow-xl"
         :style="popoverStyle"
       >
         <div class="mb-2 flex items-center justify-between">
@@ -107,7 +107,7 @@ onUnmounted(() => {
             :value="shareUrl"
             readonly
             rows="3"
-            class="flex-1 resize-none border border-gray-600 rounded bg-gray-700 px-3 py-2 font-mono text-xs text-gray-200 outline-none focus:border-blue-500"
+            class="flex-1 resize-none border border-gray-600 rounded bg-gray-700 px-3 py-2 text-xs text-gray-200 font-mono outline-none focus:border-blue-500"
             @focus="($event.target as HTMLTextAreaElement).select()"
           />
           <button

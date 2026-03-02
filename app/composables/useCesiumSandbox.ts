@@ -17,7 +17,7 @@ import type { SandcastleShareData } from '~/composables/shareService/common/prot
 import type { SandcastleAPI } from '~/utils/sandcastle'
 import type { SandboxToParentMessage } from '~/utils/sandcastle/transport'
 import { useScriptTag } from '@vueuse/core'
-import { createSandcastleAPI, wrapCodeInTemplate } from '~/utils/sandcastle'
+import { createSandcastleAPI, wrapCodeInESModule } from '~/utils/sandcastle'
 
 // #region Global type augmentation
 
@@ -87,16 +87,14 @@ export function useCesiumSandbox(options: UseCesiumSandboxOptions = {}) {
         currentHtmlElement = htmlElement
       }
 
-      if (currentScriptElement) {
-        currentScriptElement.parentNode?.removeChild(currentScriptElement)
-        currentScriptElement = null
-      }
+      currentScriptElement?.remove()
+      currentScriptElement = null
 
       postToParent?.({ type: 'reload' })
 
       const script = document.createElement('script')
-      script.type = 'text/javascript'
-      script.textContent = wrapCodeInTemplate(data.code)
+      script.type = 'module'
+      script.textContent = wrapCodeInESModule(data.code)
       document.body.appendChild(script)
       currentScriptElement = script
     }

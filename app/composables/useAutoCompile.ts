@@ -157,14 +157,7 @@ export function useAutoCompile(fsLoading: Ref<boolean>): AutoCompileResult {
           swcWasm(),
         ],
         output: {
-          format: 'iife' as const,
-          name: 'CesiumApp',
-          // 将外部模块映射到全局变量，使 IIFE 正确引用 CDN 加载的全局对象
-          globals: {
-            cesium: 'Cesium',
-            Cesium: 'Cesium',
-            Sandcastle: 'Sandcastle',
-          },
+          format: 'es' as const,
         },
       }
 

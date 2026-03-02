@@ -23,6 +23,17 @@ useHead({
     { charset: 'utf-8' },
     { name: 'viewport', content: 'width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no' },
   ],
+  script: [
+    {
+      type: 'importmap',
+      innerHTML: JSON.stringify({
+        imports: {
+          Sandcastle: '/Sandcastle.js',
+          cesium: '/cesium-shim.js',
+        },
+      }),
+    },
+  ],
 })
 
 // #region Execution setup

@@ -58,6 +58,7 @@ export default defineNuxtConfig({
       },
     ],
   },
+  sourcemap: true,
   vite: {
     plugins: [
       nodePolyfills({

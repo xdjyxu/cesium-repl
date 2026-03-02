@@ -51,6 +51,27 @@ export function wrapCodeInTemplate(code: string): string {
   ].join('\n')
 }
 
+/**
+ * Wraps user code as an ES module with auto-injected Cesium and Sandcastle imports.
+ * Imports are appended at the end so user code line numbers are preserved.
+ * Used when Rollup outputs ES format and the sandbox page resolves specifiers via importmap.
+ */
+export function wrapCodeInESModule(code: string): string {
+  const additions: string[] = []
+  if (!/^import\s+\*\s+as\s+Cesium\s+from\s+(['"])cesium\1/m.test(code))
+    additions.push('import * as Cesium from "cesium";')
+  if (!/^import\s+Sandcastle\s+from\s+(['"])Sandcastle\1/m.test(code))
+    additions.push('import Sandcastle from "Sandcastle";')
+
+  return [
+    code,
+    '// Imports are hoisted. Adding them here preserves line numbers.',
+    ...additions,
+    'Sandcastle.finishedLoading();',
+    'window.Cesium = Cesium;',
+  ].join('\n')
+}
+
 // #endregion
 
 // #region Types

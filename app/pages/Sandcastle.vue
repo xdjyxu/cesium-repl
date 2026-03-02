@@ -11,7 +11,6 @@
 
 import { useEventListener } from '@vueuse/core'
 import { useIframeTransport } from '~/composables/useTransport'
-import { TEMPLATE_HEADER_LINES } from '~/utils/sandcastle'
 
 // 禁用布局
 definePageMeta({
@@ -24,13 +23,24 @@ useHead({
     { charset: 'utf-8' },
     { name: 'viewport', content: 'width=device-width, initial-scale=1' },
   ],
+  script: [
+    {
+      type: 'importmap',
+      innerHTML: JSON.stringify({
+        imports: {
+          Sandcastle: '/Sandcastle.js',
+          cesium: '/cesium-shim.js',
+        },
+      }),
+    },
+  ],
 })
 
 // #region Transport & sandbox setup
 
 const transport = useIframeTransport()
 
-const { isCesiumReady, isLoadingOverlayVisible, executeOrQueue } = useCesiumSandbox({
+const { isLoadingOverlayVisible, executeOrQueue } = useCesiumSandbox({
   postToParent: msg => transport.value?.write(msg),
 })
 
@@ -88,7 +98,7 @@ onUnmounted(() => {
 // #region 全局错误处理
 
 useEventListener(window, 'error', (event: ErrorEvent) => {
-  const editorLine = event.lineno ? event.lineno - TEMPLATE_HEADER_LINES : undefined
+  const editorLine = event.lineno ?? undefined
   transport.value?.write({
     type: 'error',
     message: String(event.message),
