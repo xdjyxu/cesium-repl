@@ -101,7 +101,7 @@ const dividerClass = computed(() => {
     </div>
 
     <div
-      class="bg-gray-700 transition-colors"
+      class="bg-gray-200 transition-colors dark:bg-gray-700"
       :class="[dividerClass, { 'bg-blue-600': isDragging }]"
       @mousedown="startDrag"
     />

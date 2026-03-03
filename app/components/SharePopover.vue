@@ -66,7 +66,7 @@ onUnmounted(() => {
   <div>
     <button
       ref="buttonRef"
-      class="h-7 rounded bg-gray-800 px-3 text-sm text-gray-400 transition-colors hover:bg-gray-700 hover:text-gray-200"
+      class="h-7 rounded bg-gray-100 px-3 text-sm text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
       title="Share"
       @click="openPopover"
     >
@@ -84,20 +84,20 @@ onUnmounted(() => {
       <!-- Popover panel -->
       <div
         v-if="isOpen"
-        class="fixed z-50 w-96 border border-gray-600 rounded-lg bg-gray-800 p-4 shadow-xl"
+        class="fixed z-50 w-96 border border-gray-300 rounded-lg bg-gray-100 p-4 shadow-xl dark:border-gray-600 dark:bg-gray-800"
         :style="popoverStyle"
       >
         <div class="mb-2 flex items-center justify-between">
-          <span class="text-sm text-gray-200 font-semibold">Share</span>
+          <span class="text-sm text-gray-800 font-semibold dark:text-gray-200">Share</span>
           <button
-            class="h-6 w-6 flex items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-700 hover:text-gray-200"
+            class="h-6 w-6 flex items-center justify-center rounded text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
             @click="isOpen = false"
           >
             <div class="i-carbon-close text-sm" />
           </button>
         </div>
 
-        <p class="mb-3 text-xs text-gray-400">
+        <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
           Copy this link to share the current state. Re-share after any changes.
         </p>
 
@@ -107,12 +107,12 @@ onUnmounted(() => {
             :value="shareUrl"
             readonly
             rows="3"
-            class="flex-1 resize-none border border-gray-600 rounded bg-gray-700 px-3 py-2 text-xs text-gray-200 font-mono outline-none focus:border-blue-500"
+            class="flex-1 resize-none border border-gray-300 rounded bg-gray-200 px-3 py-2 text-xs text-gray-800 font-mono outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
             @focus="($event.target as HTMLTextAreaElement).select()"
           />
           <button
             class="mt-0.5 h-8 w-8 flex shrink-0 items-center justify-center rounded transition-colors"
-            :class="wasCopied ? 'bg-green-700 text-green-200' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'"
+            :class="wasCopied ? 'bg-green-700 text-green-200' : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'"
             :title="wasCopied ? 'Copied!' : 'Copy to clipboard'"
             @click="copyToClipboard"
           >

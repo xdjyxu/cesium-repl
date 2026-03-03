@@ -95,7 +95,7 @@ function getEntryClass(level: string): string {
   switch (level) {
     case 'error': return 'text-red-400'
     case 'warn': return 'text-yellow-400'
-    default: return 'text-gray-300'
+    default: return 'text-gray-700 dark:text-gray-300'
   }
 }
 
@@ -151,7 +151,7 @@ watch(artifact, () => {
 </script>
 
 <template>
-  <div class="h-full w-full flex flex-col bg-gray-900">
+  <div class="h-full w-full flex flex-col bg-white dark:bg-gray-900">
     <!-- 预览内容 -->
     <div class="flex flex-1 flex-col overflow-hidden">
       <!-- iframe 沙箱 -->
@@ -175,25 +175,25 @@ watch(artifact, () => {
 
     <!-- Console 面板 -->
     <div
-      class="border-t border-gray-700 bg-gray-900 transition-all"
+      class="border-t border-gray-200 bg-white transition-all dark:border-gray-700 dark:bg-gray-900"
       :style="{ height: isConsoleOpen ? `${consoleHeight}px` : '32px' }"
     >
       <!-- Console 标题栏 -->
       <div
-        class="h-8 flex cursor-pointer items-center justify-between bg-gray-800 px-4"
+        class="h-8 flex cursor-pointer items-center justify-between bg-gray-100 px-4 dark:bg-gray-800"
         @click="toggleConsole"
       >
         <div class="flex items-center gap-2">
           <div
-            class="i-carbon-chevron-right text-sm text-gray-400 transition-transform"
+            class="i-carbon-chevron-right text-sm text-gray-500 transition-transform dark:text-gray-400"
             :class="[
               { 'rotate-90': isConsoleOpen },
             ]"
           />
-          <span class="text-sm text-gray-200">Console</span>
+          <span class="text-sm text-gray-800 dark:text-gray-200">Console</span>
           <span
             v-if="consoleEntries.length > 0"
-            class="rounded-full bg-gray-700 px-2 py-0.5 text-xs text-gray-300"
+            class="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-700 dark:bg-gray-700 dark:text-gray-300"
           >
             {{ consoleEntries.length }}
           </span>
@@ -219,10 +219,10 @@ watch(artifact, () => {
         <div
           v-for="entry in consoleEntries"
           :key="entry.id"
-          class="mb-1 flex items-start gap-2 border-b border-gray-800 pb-1"
+          class="mb-1 flex items-start gap-2 border-b border-gray-100 pb-1 dark:border-gray-800"
         >
           <!-- 时间戳 -->
-          <span class="shrink-0 text-gray-600">
+          <span class="shrink-0 text-gray-400 dark:text-gray-600">
             {{ formatTime(entry.timestamp) }}
           </span>
 
@@ -240,7 +240,7 @@ watch(artifact, () => {
           >{{ entry.message }}</pre>
 
           <!-- 行号（如果有） -->
-          <span v-if="entry.lineNumber" class="shrink-0 text-xs text-gray-600">
+          <span v-if="entry.lineNumber" class="shrink-0 text-xs text-gray-400 dark:text-gray-600">
             :{{ entry.lineNumber }}
           </span>
         </div>

@@ -41,19 +41,19 @@ function handleSelectFile(_path: string) {
 </script>
 
 <template>
-  <div class="h-screen w-screen flex overflow-hidden bg-gray-900">
+  <div class="h-screen w-screen flex overflow-hidden bg-white dark:bg-gray-900">
     <!-- 左侧区域和右侧预览区域 -->
     <SplitPane direction="horizontal" :initial-ratio="0.4" :min-size="300">
       <template #first>
         <!-- 左侧区域（侧边栏 + 主内容区） -->
         <div class="h-full w-full flex flex-col overflow-hidden">
           <!-- Header（只覆盖左侧） -->
-          <div class="h-10 flex shrink-0 items-center justify-between border-b border-gray-700 bg-gray-800 px-4">
-            <span class="text-sm text-gray-200 font-semibold">Cesium REPL</span>
+          <div class="h-10 flex shrink-0 items-center justify-between border-b border-gray-200 bg-gray-100 px-4 dark:border-gray-700 dark:bg-gray-800">
+            <span class="text-sm text-gray-800 font-semibold dark:text-gray-200">Cesium REPL</span>
             <div class="flex items-center gap-2">
               <SharePopover />
               <button
-                class="h-7 rounded bg-gray-800 px-3 text-sm text-gray-400 transition-colors hover:bg-gray-700 hover:text-gray-200"
+                class="h-7 rounded bg-gray-100 px-3 text-sm text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
                 title="Open in standalone window"
                 @click="openStandalone"
               >

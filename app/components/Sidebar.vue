@@ -46,16 +46,17 @@ function handleThemeChange(event: Event) {
 </script>
 
 <template>
-  <div class="h-full w-12 flex flex-col items-center bg-gray-800 py-2">
+  <div class="h-full w-12 flex flex-col items-center bg-gray-100 py-2 dark:bg-gray-800">
     <!-- 顶部视图切换按钮 -->
     <div class="flex flex-col items-center gap-2">
       <button
         v-for="view in views"
         :key="view.id"
-        class="h-12 w-12 flex items-center justify-center rounded transition-colors" :class="[
+        class="h-12 w-12 flex items-center justify-center rounded transition-colors"
+        :class="[
           activeView === view.id
-            ? 'bg-gray-700 text-blue-400'
-            : 'bg-transparent text-gray-500 hover:bg-gray-700 hover:text-gray-300',
+            ? 'bg-gray-200 text-blue-500 dark:bg-gray-700 dark:text-blue-400'
+            : 'bg-transparent text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300',
         ]"
         :title="view.label"
         @click="selectView(view.id)"
@@ -67,7 +68,7 @@ function handleThemeChange(event: Event) {
     <!-- 底部设置按钮 -->
     <div class="mt-auto">
       <button
-        class="h-12 w-12 flex items-center justify-center rounded bg-transparent text-gray-500 transition-colors hover:bg-gray-700 hover:text-gray-300"
+        class="h-12 w-12 flex items-center justify-center rounded bg-transparent text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
         title="Settings"
         @click="toggleSettings"
       >
@@ -83,15 +84,15 @@ function handleThemeChange(event: Event) {
         @click="isSettingsOpen = false"
       >
         <div
-          class="max-w-md w-full rounded-lg bg-gray-800 p-6 shadow-xl"
+          class="max-w-md w-full rounded-lg bg-gray-100 p-6 shadow-xl dark:bg-gray-800"
           @click.stop
         >
           <div class="mb-4 flex items-center justify-between">
-            <h2 class="text-lg text-gray-200 font-semibold">
+            <h2 class="text-lg text-gray-800 font-semibold dark:text-gray-200">
               Settings
             </h2>
             <button
-              class="h-8 w-8 flex items-center justify-center rounded bg-transparent text-gray-400 transition-colors hover:bg-gray-700 hover:text-gray-200"
+              class="h-8 w-8 flex items-center justify-center rounded bg-transparent text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
               @click="isSettingsOpen = false"
             >
               <div class="i-carbon-close text-xl" />
@@ -100,10 +101,10 @@ function handleThemeChange(event: Event) {
 
           <div class="space-y-4">
             <div>
-              <label class="mb-1 block text-sm text-gray-300">Theme</label>
+              <label class="mb-1 block text-sm text-gray-700 dark:text-gray-300">Theme</label>
               <select
                 :value="currentTheme"
-                class="w-full border border-gray-600 rounded bg-gray-700 px-3 py-2 text-sm text-gray-200 outline-none transition-colors focus:border-blue-500"
+                class="w-full border border-gray-300 rounded bg-gray-200 px-3 py-2 text-sm text-gray-800 outline-none transition-colors focus:border-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
                 @change="handleThemeChange"
               >
                 <option value="dark">Dark</option>

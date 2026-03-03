@@ -57,17 +57,17 @@ function handleToggleLock(tab: Tab) {
 </script>
 
 <template>
-  <div class="h-full w-full flex flex-col bg-gray-900">
+  <div class="h-full w-full flex flex-col bg-white dark:bg-gray-900">
     <!-- 文件标签栏 -->
-    <div class="h-10 flex shrink-0 items-center overflow-x-auto border-b border-gray-700 bg-gray-800">
+    <div class="h-10 flex shrink-0 items-center overflow-x-auto border-b border-gray-200 bg-gray-100 dark:border-gray-700 dark:bg-gray-800">
       <div
         v-for="tab in tabs"
         :key="tab.path"
-        class="group relative h-full flex shrink-0 cursor-pointer items-center gap-1.5 border-r border-gray-700 pl-4 pr-2 text-sm transition-colors"
+        class="group relative h-full flex shrink-0 cursor-pointer items-center gap-1.5 border-r border-gray-200 pl-4 pr-2 text-sm transition-colors dark:border-gray-700"
         :class="[
           activeFilePath === tab.path
-            ? 'bg-gray-900 text-gray-100'
-            : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-200',
+            ? 'bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100'
+            : 'text-gray-500 hover:bg-gray-200/50 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-gray-200',
         ]"
         @click="handleTabClick(tab)"
       >
@@ -86,7 +86,7 @@ function handleToggleLock(tab: Tab) {
           <!-- 锁定时：显示锁图标，点击解锁 -->
           <button
             v-if="tab.locked"
-            class="h-4 w-4 flex items-center justify-center rounded text-gray-500 transition-colors hover:bg-gray-600 hover:text-gray-300"
+            class="h-4 w-4 flex items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-300 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-600 dark:hover:text-gray-300"
             title="Unlock tab"
             @click.stop="handleToggleLock(tab)"
           >
@@ -97,7 +97,7 @@ function handleToggleLock(tab: Tab) {
           <template v-else>
             <!-- 关闭按钮（hover 时显示，平时透明占位） -->
             <button
-              class="h-4 w-4 flex items-center justify-center rounded text-transparent transition-colors group-hover:text-gray-500 hover:!bg-gray-600 hover:!text-gray-300"
+              class="h-4 w-4 flex items-center justify-center rounded text-transparent transition-colors group-hover:text-gray-400 hover:!bg-gray-300 hover:!text-gray-700 dark:group-hover:text-gray-500 dark:hover:!bg-gray-600 dark:hover:!text-gray-300"
               title="Close tab"
               @click.stop="handleTabClose(tab)"
             >
@@ -110,17 +110,17 @@ function handleToggleLock(tab: Tab) {
       <!-- 无 tab 时的占位 -->
       <div
         v-if="tabs?.length === 0"
-        class="px-4 text-sm text-gray-600 italic"
+        class="px-4 text-sm text-gray-400 italic dark:text-gray-600"
       >
         No files
       </div>
     </div>
 
     <!-- Monaco Editor 容器 -->
-    <div class="flex-1 overflow-hidden bg-gray-900">
+    <div class="flex-1 overflow-hidden bg-white dark:bg-gray-900">
       <div
         v-if="!activeFilePath"
-        class="h-full w-full flex flex-col items-center justify-center gap-2 text-gray-600"
+        class="h-full w-full flex flex-col items-center justify-center gap-2 text-gray-400 dark:text-gray-600"
       >
         <div class="i-carbon-code text-4xl" />
         <span class="text-sm">Select a file to edit</span>

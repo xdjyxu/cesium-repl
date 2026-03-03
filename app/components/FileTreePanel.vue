@@ -169,18 +169,18 @@ function getFileIconClass(name: string): string {
     case 'json':
       return 'i-carbon-document text-yellow-300'
     case 'md':
-      return 'i-carbon-document text-gray-300'
+      return 'i-carbon-document text-gray-500 dark:text-gray-300'
     default:
-      return 'i-carbon-document text-gray-400'
+      return 'i-carbon-document text-gray-500 dark:text-gray-400'
   }
 }
 </script>
 
 <template>
-  <div class="h-full flex flex-col select-none overflow-hidden bg-gray-900">
+  <div class="h-full flex flex-col select-none overflow-hidden bg-white dark:bg-gray-900">
     <!-- 面板标题 -->
     <div class="h-9 flex shrink-0 items-center px-4">
-      <span class="text-xs text-gray-400 font-semibold tracking-wider uppercase">Explorer</span>
+      <span class="text-xs text-gray-500 font-semibold tracking-wider uppercase dark:text-gray-400">Explorer</span>
     </div>
 
     <!-- 文件树 -->
@@ -199,10 +199,10 @@ function getFileIconClass(name: string): string {
         :key="node.isDirectory ? node.dirKey : node.path"
         class="h-[22px] flex cursor-pointer items-center gap-1 pr-2 text-[13px] transition-colors"
         :class="[
-          node.isDirectory ? 'text-gray-200' : 'text-gray-300',
+          node.isDirectory ? 'text-gray-800 dark:text-gray-200' : 'text-gray-700 dark:text-gray-300',
           !node.isDirectory && activeFilePath === node.path
-            ? 'bg-gray-600 text-gray-100'
-            : 'hover:bg-gray-700/60',
+            ? 'bg-gray-200 text-gray-900 dark:bg-gray-600 dark:text-gray-100'
+            : 'hover:bg-gray-200/60 dark:hover:bg-gray-700/60',
         ]"
         :style="{ paddingLeft: `${8 + node.depth * 16}px` }"
         @click="handleNodeClick(node)"
@@ -210,7 +210,7 @@ function getFileIconClass(name: string): string {
         <!-- 目录：折叠/展开箭头 + 文件夹图标 -->
         <template v-if="node.isDirectory">
           <div
-            class="shrink-0 text-gray-400 transition-transform"
+            class="shrink-0 text-gray-500 transition-transform dark:text-gray-400"
             :class="[
               expandedDirs[node.dirKey] !== false
                 ? 'i-carbon-chevron-down'
