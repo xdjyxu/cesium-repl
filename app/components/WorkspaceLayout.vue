@@ -9,6 +9,23 @@ const { state } = useExampleLoader()
 // 集成自动编译功能
 useAutoCompile(toRef(() => state.loading))
 
+// 主题系统：监听 resolvedTheme$ 并同步到 <html> 类名和 Monaco 主题
+const profileService = useProfileService()
+const monacoLoaderService = useMonacoLoaderService()
+
+function applyTheme(theme: 'light' | 'dark') {
+  document.documentElement.classList.toggle('dark', theme === 'dark')
+  document.documentElement.classList.toggle('light', theme === 'light')
+  monacoLoaderService.getMonaco().then(monaco =>
+    monaco.editor.setTheme(theme === 'dark' ? 'vs-dark' : 'vs'),
+  )
+}
+
+onMounted(() => {
+  const sub = profileService.resolvedTheme$.subscribe(applyTheme)
+  onUnmounted(() => sub.unsubscribe())
+})
+
 const { getCompressed } = useShareData()
 
 function openStandalone() {

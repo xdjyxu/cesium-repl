@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import type { Theme } from '~/composables/profileService/common/protocol'
+import { useObservable } from '@vueuse/rxjs'
+
 /**
  * VSCode 风格的侧边栏
  * 提供 Gallery 和 Editor 视图切换
@@ -24,6 +27,9 @@ const views = [
 ]
 
 const isSettingsOpen = ref(false)
+const profileService = useProfileService()
+const profile = useObservable(profileService.profile$)
+const currentTheme = computed(() => profile.value?.theme ?? 'auto')
 
 function selectView(view: SidebarView) {
   emit('update:activeView', view)
@@ -31,6 +37,11 @@ function selectView(view: SidebarView) {
 
 function toggleSettings() {
   isSettingsOpen.value = !isSettingsOpen.value
+}
+
+function handleThemeChange(event: Event) {
+  const theme = (event.target as HTMLSelectElement).value as Theme
+  profileService.setTheme(theme)
 }
 </script>
 
@@ -87,52 +98,20 @@ function toggleSettings() {
             </button>
           </div>
 
-          <form class="space-y-4" @submit.prevent>
-            <div>
-              <label class="mb-1 block text-sm text-gray-300">Profile Name</label>
-              <input
-                type="text"
-                placeholder="Enter profile name"
-                class="w-full border border-gray-600 rounded bg-gray-700 px-3 py-2 text-sm text-gray-200 outline-none transition-colors focus:border-blue-500"
-              >
-            </div>
-
-            <div>
-              <label class="mb-1 block text-sm text-gray-300">Description</label>
-              <textarea
-                placeholder="Enter description"
-                rows="3"
-                class="w-full border border-gray-600 rounded bg-gray-700 px-3 py-2 text-sm text-gray-200 outline-none transition-colors focus:border-blue-500"
-              />
-            </div>
-
+          <div class="space-y-4">
             <div>
               <label class="mb-1 block text-sm text-gray-300">Theme</label>
               <select
+                :value="currentTheme"
                 class="w-full border border-gray-600 rounded bg-gray-700 px-3 py-2 text-sm text-gray-200 outline-none transition-colors focus:border-blue-500"
+                @change="handleThemeChange"
               >
-                <option>Dark</option>
-                <option>Light</option>
-                <option>Auto</option>
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+                <option value="auto">Auto</option>
               </select>
             </div>
-
-            <div class="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                class="rounded bg-gray-700 px-4 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-600"
-                @click="isSettingsOpen = false"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                class="rounded bg-blue-600 px-4 py-2 text-sm text-white transition-colors hover:bg-blue-500"
-              >
-                Save
-              </button>
-            </div>
-          </form>
+          </div>
         </div>
       </div>
     </Teleport>
