@@ -249,7 +249,6 @@ export class EditorServiceImpl implements EditorService {
   async createEditor(container: HTMLElement): Promise<monaco.editor.IStandaloneCodeEditor> {
     const monacoInstance = await this._ensureMonaco()
     return monacoInstance.editor.create(container, {
-      theme: 'vs-dark',
       automaticLayout: true,
       fontSize: 14,
       minimap: {
