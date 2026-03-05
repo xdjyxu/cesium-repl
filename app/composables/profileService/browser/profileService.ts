@@ -118,6 +118,7 @@ export class ProfileServiceImpl implements ProfileService {
   private _getDefaultProfile(): Profile {
     return {
       theme: 'auto',
+      cesiumAccessToken: undefined,
     }
   }
 
@@ -151,6 +152,17 @@ export class ProfileServiceImpl implements ProfileService {
     this._profileSubject.next(newProfile)
 
     // 持久化
+    await this._saveProfile(newProfile)
+  }
+
+  async setAccessToken(token: string | undefined): Promise<void> {
+    const currentProfile = this.getProfile()
+    const newProfile: Profile = {
+      ...currentProfile,
+      cesiumAccessToken: token || undefined,
+    }
+
+    this._profileSubject.next(newProfile)
     await this._saveProfile(newProfile)
   }
 

@@ -16,7 +16,9 @@
 import type { SandcastleShareData } from '~/composables/shareService/common/protocol'
 import type { SandcastleAPI } from '~/utils/sandcastle'
 import type { SandboxToParentMessage } from '~/utils/sandcastle/transport'
+import { useObservable } from '@vueuse/rxjs'
 import { useScriptTag } from '@vueuse/core'
+import { map } from 'rxjs'
 import { createSandcastleAPI, wrapCodeInESModule } from '~/utils/sandcastle'
 
 // #region Global type augmentation
@@ -42,6 +44,8 @@ export interface UseCesiumSandboxOptions {
 
 export function useCesiumSandbox(options: UseCesiumSandboxOptions = {}) {
   const { postToParent } = options
+
+  const profileService = useProfileService()
 
   const isCesiumReady = ref(false)
   const isLoadingOverlayVisible = ref(true)
@@ -124,9 +128,22 @@ export function useCesiumSandbox(options: UseCesiumSandboxOptions = {}) {
     link: [{ rel: 'stylesheet', href: '/lib/cesium/Widgets/widgets.css' }],
   })
 
+  function applyAccessToken(token: string | undefined): void {
+    if (typeof window.Cesium !== 'undefined' && window.Cesium.Ion) {
+      window.Cesium.Ion.defaultAccessToken = token ?? ''
+    }
+  }
+
+  // Keep token in sync when user updates it after Cesium is already loaded
+  const cesiumAccessToken = useObservable(
+    profileService.profile$.pipe(map(p => p.cesiumAccessToken)),
+  )
+  watch(cesiumAccessToken, token => applyAccessToken(token))
+
   function pollForCesium() {
     if (typeof window.Cesium !== 'undefined') {
       isCesiumReady.value = true
+      applyAccessToken(profileService.getProfile().cesiumAccessToken)
       postToParent?.({ type: 'ready' })
 
       if (pendingExecution.value) {

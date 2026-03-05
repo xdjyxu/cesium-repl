@@ -30,6 +30,13 @@ const isSettingsOpen = ref(false)
 const profileService = useProfileService()
 const profile = useObservable(profileService.profile$)
 const currentTheme = computed(() => profile.value?.theme ?? 'auto')
+const tokenInput = ref(profile.value?.cesiumAccessToken ?? '')
+const isTokenVisible = ref(false)
+
+watch(
+  () => profile.value?.cesiumAccessToken,
+  (val) => { tokenInput.value = val ?? '' },
+)
 
 function selectView(view: SidebarView) {
   emit('update:activeView', view)
@@ -42,6 +49,11 @@ function toggleSettings() {
 function handleThemeChange(event: Event) {
   const theme = (event.target as HTMLSelectElement).value as Theme
   profileService.setTheme(theme)
+}
+
+function handleTokenBlur() {
+  const trimmed = tokenInput.value.trim()
+  profileService.setAccessToken(trimmed || undefined)
 }
 </script>
 
@@ -111,6 +123,28 @@ function handleThemeChange(event: Event) {
                 <option value="light">Light</option>
                 <option value="auto">Auto</option>
               </select>
+            </div>
+
+            <div>
+              <label class="mb-1 block text-sm text-gray-700 dark:text-gray-300">Cesium Ion Access Token</label>
+              <div class="relative">
+                <input
+                  v-model="tokenInput"
+                  :type="isTokenVisible ? 'text' : 'password'"
+                  placeholder="Leave empty to use the default token"
+                  class="w-full border border-gray-300 rounded bg-gray-200 py-2 pl-3 pr-9 text-sm text-gray-800 outline-none transition-colors focus:border-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-500"
+                  @blur="handleTokenBlur"
+                  @keydown.enter="handleTokenBlur"
+                >
+                <button
+                  type="button"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-700 dark:hover:text-gray-200"
+                  :title="isTokenVisible ? 'Hide token' : 'Show token'"
+                  @click="isTokenVisible = !isTokenVisible"
+                >
+                  <div :class="isTokenVisible ? 'i-carbon-view-off' : 'i-carbon-view'" class="text-base" />
+                </button>
+              </div>
             </div>
           </div>
         </div>

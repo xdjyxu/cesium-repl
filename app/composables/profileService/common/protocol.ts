@@ -14,6 +14,11 @@ export interface Profile {
    * 主题设置
    */
   theme: Theme
+
+  /**
+   * Cesium Ion 访问令牌（可选，留空则使用默认公共令牌）
+   */
+  cesiumAccessToken?: string
 }
 
 /**
@@ -46,6 +51,12 @@ export interface ProfileService {
    * @param theme - 主题类型
    */
   setTheme: (theme: Theme) => Promise<void>
+
+  /**
+   * 设置 Cesium Ion 访问令牌
+   * @param token - 访问令牌，传 undefined 则清除自定义令牌
+   */
+  setAccessToken: (token: string | undefined) => Promise<void>
 
   /**
    * 释放所有资源
