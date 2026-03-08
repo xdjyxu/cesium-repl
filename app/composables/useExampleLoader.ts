@@ -1,5 +1,6 @@
 import type { DeepReadonly, Ref } from 'vue'
 import type { SandcastleShareData } from './shareService/common/protocol'
+import { firstValueFrom } from 'rxjs'
 import { useEditorService } from './editorService/browser/useEditorService'
 import { useFileService } from './fileService/common/useFileService'
 import { useShareService } from './shareService/common/useShareService'
@@ -64,6 +65,11 @@ export interface ExampleLoaderReturn {
    * 清空所有文件
    */
   clear: () => Promise<void>
+
+  /**
+   * 加载 index 示例（New Sandcastle 模板）
+   */
+  loadIndex: () => Promise<void>
 }
 
 /**
@@ -83,6 +89,17 @@ export interface ExampleLoaderReturn {
  * </script>
  * ```
  */
+/**
+ * examples/index 默认模板文件（用于 New Sandcastle 初始化）
+ */
+const INDEX_TEMPLATE_FILES: ExampleFile[] = [
+  {
+    path: '/main.js',
+    content: `import * as Cesium from 'cesium'\n\nconst viewer = new Cesium.Viewer('cesiumContainer')\n`,
+    language: 'javascript',
+  },
+]
+
 export function useExampleLoader(): ExampleLoaderReturn {
   const fileService = useFileService()
   const editorService = useEditorService()
@@ -144,20 +161,23 @@ export function useExampleLoader(): ExampleLoaderReturn {
     // 关闭所有 Tab（强制，忽略锁定状态）
     tabService.closeAll()
 
+    // 获取 editorService 当前追踪的所有文件（含用户在文件树手动创建的文件）
+    const allPaths = await firstValueFrom(editorService.files$)
+
     // 清空所有 Monaco 模型
-    state.files.forEach((file) => {
-      editorService.deleteModel(file.path)
+    allPaths.forEach((path) => {
+      editorService.deleteModel(path)
     })
 
     // 清空虚拟文件系统中的所有文件
     await Promise.all(
-      state.files.map(async (file) => {
+      allPaths.map(async (path) => {
         try {
-          await fileService.unlink(file.path)
+          await fileService.unlink(path)
         }
         catch (err) {
           // 文件可能不存在，忽略错误
-          console.warn(`Failed to delete file ${file.path}:`, err)
+          console.warn(`Failed to delete file ${path}:`, err)
         }
       }),
     )
@@ -286,12 +306,19 @@ export function useExampleLoader(): ExampleLoaderReturn {
 
   // 组件卸载时清理
   onUnmounted(() => {
-    // 关闭所有 Tab 并销毁 Monaco 模型
-    tabService.closeAll()
-    state.files.forEach((file) => {
-      editorService.deleteModel(file.path)
-    })
+    clearAll()
   })
+
+  /**
+   * 加载 index 示例（New Sandcastle 模板）
+   * 优先使用已从 gallery 加载的数据，否则使用内置默认模板
+   */
+  async function loadIndex() {
+    const files = internalExample.value?.files?.length
+      ? internalExample.value.files
+      : INDEX_TEMPLATE_FILES
+    await loadExampleFiles(files)
+  }
 
   return {
     /**
@@ -313,5 +340,10 @@ export function useExampleLoader(): ExampleLoaderReturn {
      * 清空所有文件
      */
     clear: clearAll,
+
+    /**
+     * 加载 index 示例（New Sandcastle 模板）
+     */
+    loadIndex,
   }
 }

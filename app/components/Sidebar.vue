@@ -18,6 +18,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   'update:activeView': [view: SidebarView]
+  'newSandcastle': []
 }>()
 
 const views = [
@@ -74,6 +75,17 @@ function handleTokenBlur() {
         @click="selectView(view.id)"
       >
         <div class="text-xl" :class="[view.icon]" />
+      </button>
+    </div>
+
+    <!-- New Sandcastle 操作按钮（位于 Explorer 后） -->
+    <div class="mt-2">
+      <button
+        class="h-12 w-12 flex items-center justify-center rounded bg-transparent text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+        title="New Sandcastle"
+        @click="emit('newSandcastle')"
+      >
+        <div class="i-carbon-add-large text-xl" />
       </button>
     </div>
 

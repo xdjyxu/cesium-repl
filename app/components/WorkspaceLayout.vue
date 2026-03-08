@@ -4,7 +4,7 @@ import type { SidebarView } from '~/components/Sidebar.vue'
 const activeView = ref<SidebarView>('editor')
 
 // 加载示例（依赖 fileService，必须在 provide 的子组件中调用）
-const { state } = useExampleLoader()
+const { state, loadIndex } = useExampleLoader()
 
 // 集成自动编译功能
 useAutoCompile(toRef(() => state.loading))
@@ -38,6 +38,23 @@ function openStandalone() {
 function handleSelectFile(_path: string) {
   activeView.value = 'editor'
 }
+
+const router = useRouter()
+
+async function handleNewSandcastle() {
+  // 清除 URL 参数（如 ?id=xxx 或 #c=xxx），让 useExampleLoader 的 watcher 归位到 index
+  const route = router.currentRoute.value
+  const isAtRoot = !route.query.id && !route.hash
+  if (!isAtRoot) {
+    await router.push('/')
+    // watcher 会自动加载 index 示例，无需再手动调用
+  }
+  else {
+    // 已在根路由，直接重置
+    await loadIndex()
+  }
+  activeView.value = 'editor'
+}
 </script>
 
 <template>
@@ -64,7 +81,7 @@ function handleSelectFile(_path: string) {
 
           <!-- 侧边栏 + 主内容区 -->
           <div class="flex flex-1 overflow-hidden">
-            <Sidebar v-model:active-view="activeView" />
+            <Sidebar v-model:active-view="activeView" @new-sandcastle="handleNewSandcastle" />
 
             <div class="flex-1 overflow-hidden">
               <GalleryPanel v-if="activeView === 'gallery'" />
