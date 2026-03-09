@@ -1,6 +1,6 @@
 import type { DeepReadonly, Ref } from 'vue'
 import type { SandcastleShareData } from './shareService/common/protocol'
-import indexMainTs from '~/examples/index/main.ts?raw'
+import indexMainTs from '~~/examples/index/main.ts?raw'
 import { useEditorService } from './editorService/browser/useEditorService'
 import { useFileService } from './fileService/common/useFileService'
 import { useShareService } from './shareService/common/useShareService'
