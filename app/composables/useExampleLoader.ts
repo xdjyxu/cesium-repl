@@ -1,6 +1,5 @@
 import type { DeepReadonly, Ref } from 'vue'
 import type { SandcastleShareData } from './shareService/common/protocol'
-import { firstValueFrom } from 'rxjs'
 import { useEditorService } from './editorService/browser/useEditorService'
 import { useFileService } from './fileService/common/useFileService'
 import { useShareService } from './shareService/common/useShareService'
@@ -162,7 +161,7 @@ export function useExampleLoader(): ExampleLoaderReturn {
     tabService.closeAll()
 
     // 获取 editorService 当前追踪的所有文件（含用户在文件树手动创建的文件）
-    const allPaths = await firstValueFrom(editorService.files$)
+    const allPaths = editorService.getFiles()
 
     // 清空所有 Monaco 模型
     allPaths.forEach((path) => {

@@ -164,6 +164,13 @@ export class EditorServiceImpl implements EditorService {
   }
 
   /**
+   * 获取当前所有已注册的文件路径列表（同步）
+   */
+  getFiles(): string[] {
+    return this._filesSubject.value
+  }
+
+  /**
    * 创建或获取文件的 Monaco Model
    */
   async createOrGetModel(

@@ -34,6 +34,10 @@ export class ServerEditorServiceImpl implements EditorService {
     return EXTENSION_TO_LANGUAGE[extension] || DEFAULT_LANGUAGE
   }
 
+  getFiles(): string[] {
+    return []
+  }
+
   createEditor(_container: HTMLElement): Promise<monaco.editor.IStandaloneCodeEditor> {
     return Promise.reject(new Error('EditorService is not available in SSR context'))
   }

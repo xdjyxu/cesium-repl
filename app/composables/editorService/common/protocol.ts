@@ -104,6 +104,12 @@ export interface EditorService {
   detectLanguage: (path: string) => FileLanguage
 
   /**
+   * 获取当前所有已注册的文件路径列表（同步）
+   * @returns 文件路径数组
+   */
+  getFiles: () => string[]
+
+  /**
    * 创建 Monaco Editor 实例并挂载到指定容器
    * @param container 编辑器容器 DOM 元素
    * @returns 创建的编辑器实例
