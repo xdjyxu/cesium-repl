@@ -16,8 +16,8 @@
 import type { SandcastleShareData } from '~/composables/shareService/common/protocol'
 import type { SandcastleAPI } from '~/utils/sandcastle'
 import type { SandboxToParentMessage } from '~/utils/sandcastle/transport'
-import { useObservable } from '@vueuse/rxjs'
 import { useScriptTag } from '@vueuse/core'
+import { useObservable } from '@vueuse/rxjs'
 import { map } from 'rxjs'
 import { createSandcastleAPI, wrapCodeInESModule } from '~/utils/sandcastle'
 

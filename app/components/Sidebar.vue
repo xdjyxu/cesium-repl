@@ -81,7 +81,7 @@ function handleTokenBlur() {
     <!-- New Sandcastle 操作按钮（位于 Explorer 后） -->
     <div class="mt-2">
       <button
-        class="h-12 w-12 flex items-center justify-center rounded bg-transparent text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+        class="h-12 w-12 flex items-center justify-center rounded bg-transparent text-gray-400 transition-colors hover:bg-gray-200 dark:text-gray-500 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-300"
         title="New Sandcastle"
         @click="emit('newSandcastle')"
       >
@@ -92,7 +92,7 @@ function handleTokenBlur() {
     <!-- 底部设置按钮 -->
     <div class="mt-auto">
       <button
-        class="h-12 w-12 flex items-center justify-center rounded bg-transparent text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+        class="h-12 w-12 flex items-center justify-center rounded bg-transparent text-gray-400 transition-colors hover:bg-gray-200 dark:text-gray-500 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-300"
         title="Settings"
         @click="toggleSettings"
       >
@@ -116,7 +116,7 @@ function handleTokenBlur() {
               Settings
             </h2>
             <button
-              class="h-8 w-8 flex items-center justify-center rounded bg-transparent text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+              class="h-8 w-8 flex items-center justify-center rounded bg-transparent text-gray-500 transition-colors hover:bg-gray-200 dark:text-gray-400 hover:text-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-200"
               @click="isSettingsOpen = false"
             >
               <div class="i-carbon-close text-xl" />
@@ -128,12 +128,18 @@ function handleTokenBlur() {
               <label class="mb-1 block text-sm text-gray-700 dark:text-gray-300">Theme</label>
               <select
                 :value="currentTheme"
-                class="w-full border border-gray-300 rounded bg-gray-200 px-3 py-2 text-sm text-gray-800 outline-none transition-colors focus:border-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                class="w-full border border-gray-300 rounded bg-gray-200 px-3 py-2 text-sm text-gray-800 outline-none transition-colors dark:border-gray-600 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-200"
                 @change="handleThemeChange"
               >
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-                <option value="auto">Auto</option>
+                <option value="dark">
+                  Dark
+                </option>
+                <option value="light">
+                  Light
+                </option>
+                <option value="auto">
+                  Auto
+                </option>
               </select>
             </div>
 
@@ -144,13 +150,13 @@ function handleTokenBlur() {
                   v-model="tokenInput"
                   :type="isTokenVisible ? 'text' : 'password'"
                   placeholder="Leave empty to use the default token"
-                  class="w-full border border-gray-300 rounded bg-gray-200 py-2 pl-3 pr-9 text-sm text-gray-800 outline-none transition-colors focus:border-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-500"
+                  class="w-full border border-gray-300 rounded bg-gray-200 py-2 pl-3 pr-9 text-sm text-gray-800 outline-none transition-colors dark:border-gray-600 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-500"
                   @blur="handleTokenBlur"
                   @keydown.enter="handleTokenBlur"
                 >
                 <button
                   type="button"
-                  class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-700 dark:hover:text-gray-200"
+                  class="absolute right-2 top-1/2 text-gray-400 transition-colors -translate-y-1/2 hover:text-gray-700 dark:hover:text-gray-200"
                   :title="isTokenVisible ? 'Hide token' : 'Show token'"
                   @click="isTokenVisible = !isTokenVisible"
                 >

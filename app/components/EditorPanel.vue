@@ -86,7 +86,7 @@ function handleToggleLock(tab: Tab) {
           <!-- 锁定时：显示锁图标，点击解锁 -->
           <button
             v-if="tab.locked"
-            class="h-4 w-4 flex items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-300 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-600 dark:hover:text-gray-300"
+            class="h-4 w-4 flex items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-300 dark:text-gray-500 hover:text-gray-700 dark:hover:bg-gray-600 dark:hover:text-gray-300"
             title="Unlock tab"
             @click.stop="handleToggleLock(tab)"
           >
@@ -97,7 +97,7 @@ function handleToggleLock(tab: Tab) {
           <template v-else>
             <!-- 关闭按钮（hover 时显示，平时透明占位） -->
             <button
-              class="h-4 w-4 flex items-center justify-center rounded text-transparent transition-colors group-hover:text-gray-400 hover:!bg-gray-300 hover:!text-gray-700 dark:group-hover:text-gray-500 dark:hover:!bg-gray-600 dark:hover:!text-gray-300"
+              class="h-4 w-4 flex items-center justify-center rounded text-transparent transition-colors group-hover:text-gray-400 hover:!bg-gray-300 dark:group-hover:text-gray-500 hover:!text-gray-700 dark:hover:!bg-gray-600 dark:hover:!text-gray-300"
               title="Close tab"
               @click.stop="handleTabClose(tab)"
             >

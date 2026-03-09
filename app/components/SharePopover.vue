@@ -66,7 +66,7 @@ onUnmounted(() => {
   <div>
     <button
       ref="buttonRef"
-      class="h-7 rounded bg-gray-100 px-3 text-sm text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+      class="h-7 rounded bg-gray-100 px-3 text-sm text-gray-500 transition-colors dark:bg-gray-800 hover:bg-gray-200 dark:text-gray-400 hover:text-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-200"
       title="Share"
       @click="openPopover"
     >
@@ -90,7 +90,7 @@ onUnmounted(() => {
         <div class="mb-2 flex items-center justify-between">
           <span class="text-sm text-gray-800 font-semibold dark:text-gray-200">Share</span>
           <button
-            class="h-6 w-6 flex items-center justify-center rounded text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+            class="h-6 w-6 flex items-center justify-center rounded text-gray-500 transition-colors hover:bg-gray-200 dark:text-gray-400 hover:text-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-200"
             @click="isOpen = false"
           >
             <div class="i-carbon-close text-sm" />
@@ -107,7 +107,7 @@ onUnmounted(() => {
             :value="shareUrl"
             readonly
             rows="3"
-            class="flex-1 resize-none border border-gray-300 rounded bg-gray-200 px-3 py-2 text-xs text-gray-800 font-mono outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+            class="flex-1 resize-none border border-gray-300 rounded bg-gray-200 px-3 py-2 text-xs text-gray-800 font-mono outline-none dark:border-gray-600 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-200"
             @focus="($event.target as HTMLTextAreaElement).select()"
           />
           <button

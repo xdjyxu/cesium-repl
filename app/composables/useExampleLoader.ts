@@ -1,5 +1,6 @@
 import type { DeepReadonly, Ref } from 'vue'
 import type { SandcastleShareData } from './shareService/common/protocol'
+import indexMainTs from '~/examples/index/main.ts?raw'
 import { useEditorService } from './editorService/browser/useEditorService'
 import { useFileService } from './fileService/common/useFileService'
 import { useShareService } from './shareService/common/useShareService'
@@ -93,9 +94,9 @@ export interface ExampleLoaderReturn {
  */
 const INDEX_TEMPLATE_FILES: ExampleFile[] = [
   {
-    path: '/main.js',
-    content: `import * as Cesium from 'cesium'\n\nconst viewer = new Cesium.Viewer('cesiumContainer')\n`,
-    language: 'javascript',
+    path: '/main.ts',
+    content: indexMainTs,
+    language: 'typescript',
   },
 ]
 
@@ -209,7 +210,7 @@ export function useExampleLoader(): ExampleLoaderReturn {
       // 更新状态
       state.files = [...files]
 
-      // 默认激活 main.js，若不存在则激活第一个文件
+      // 默认激活 main.ts/main.js，若不存在则激活第一个文件
       // openTab 会同时打开 Tab 并激活，只对默认文件调用
       const mainFile = files.find(f => /\/main\.[jt]sx?$/.test(f.path) || /^main\.[jt]sx?$/.test(f.path))
         ?? files[0]

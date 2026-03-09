@@ -341,7 +341,7 @@ function getFileIconClass(name: string): string {
       <div class="flex items-center gap-0.5 px-1">
         <!-- 新建目录 -->
         <button
-          class="h-6 w-6 flex cursor-pointer items-center justify-center rounded text-gray-500 hover:bg-gray-200 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+          class="h-6 w-6 flex cursor-pointer items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-400 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200"
           title="New Folder"
           @click="startCreate('directory')"
         >
@@ -349,7 +349,7 @@ function getFileIconClass(name: string): string {
         </button>
         <!-- 新建文件 -->
         <button
-          class="h-6 w-6 flex cursor-pointer items-center justify-center rounded text-gray-500 hover:bg-gray-200 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+          class="h-6 w-6 flex cursor-pointer items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-400 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200"
           title="New File"
           @click="startCreate('file')"
         >

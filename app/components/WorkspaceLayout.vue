@@ -70,7 +70,7 @@ async function handleNewSandcastle() {
             <div class="flex items-center gap-2">
               <SharePopover />
               <button
-                class="h-7 rounded bg-gray-100 px-3 text-sm text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                class="h-7 rounded bg-gray-100 px-3 text-sm text-gray-500 transition-colors dark:bg-gray-800 hover:bg-gray-200 dark:text-gray-400 hover:text-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-200"
                 title="Open in standalone window"
                 @click="openStandalone"
               >

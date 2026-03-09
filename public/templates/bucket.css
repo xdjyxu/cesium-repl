@@ -27,11 +27,7 @@ body {
     transparent 3px,
     transparent 25px
   );
-  --_gradient: linear-gradient(
-    180deg,
-    var(--bg-lighter) 0%,
-    var(--bg-dark) 100%
-  );
+  --_gradient: linear-gradient(180deg, var(--bg-lighter) 0%, var(--bg-dark) 100%);
 
   background-image: var(--_rings), var(--_gradient);
 }
@@ -104,14 +100,14 @@ body {
 input {
   accent-color: var(--stratakit-color-bg-accent-base);
 }
-input[type="checkbox"] {
+input[type='checkbox'] {
   vertical-align: bottom;
 }
-input[type="radio"] {
+input[type='radio'] {
   cursor: pointer;
   margin-top: 0;
   vertical-align: text-top;
 }
-input[type="range"] {
+input[type='range'] {
   vertical-align: middle;
 }

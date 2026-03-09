@@ -22,11 +22,11 @@ function selectExample(slug: string) {
       <input
         type="text"
         placeholder="Search examples..."
-        class="min-w-0 flex-1 bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400 dark:text-gray-200 dark:placeholder:text-gray-500"
+        class="min-w-0 flex-1 bg-transparent text-sm text-gray-800 outline-none dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
       >
       <select
         v-model="selectedLabel"
-        class="shrink-0 border border-gray-300 rounded bg-gray-200 px-2 py-1 text-xs text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+        class="shrink-0 border border-gray-300 rounded bg-gray-200 px-2 py-1 text-xs text-gray-800 outline-none dark:border-gray-600 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-200"
       >
         <option value="">
           All
@@ -47,7 +47,7 @@ function selectExample(slug: string) {
         <div
           v-for="example in examples"
           :key="example.id"
-          class="cursor-pointer border border-gray-200 rounded bg-gray-100 p-4 transition-colors hover:border-blue-500 dark:border-gray-700 dark:bg-gray-800"
+          class="cursor-pointer border border-gray-200 rounded bg-gray-100 p-4 transition-colors dark:border-gray-700 hover:border-blue-500 dark:bg-gray-800"
           @click="selectExample(example.slug)"
         >
           <h3 class="mb-1 text-sm text-gray-800 font-semibold dark:text-gray-200">

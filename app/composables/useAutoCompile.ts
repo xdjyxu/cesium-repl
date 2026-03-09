@@ -19,7 +19,7 @@ export interface AutoCompileResult {
 
   /**
    * 编译后的代码（响应式）
-   * 包含 main.js 和 index.html 的内容
+   * 包含 main.js/main.ts 和 index.html 的内容
    */
   compiledCode: Ref<SandcastleShareData | null>
 
@@ -75,7 +75,7 @@ async function inlineCssLinks(
  * 自动编译组合式函数
  *
  * 监听文件加载状态，当加载完成后自动触发编译。
- * 编译输出固定的 main.js 和 index.html，供 ShareService 使用。
+ * 编译输出固定的 main.js/main.ts 和 index.html，供 ShareService 使用。
  *
  * CSS 处理：
  * - JS/TS 中 `import './foo.css'` 的样式会被收集并注入到 HTML `<head>` 内
@@ -118,6 +118,16 @@ export function useAutoCompile(fsLoading: Ref<boolean>): AutoCompileResult {
         // 文件不存在时忽略
       }
 
+      // 动态检测入口文件：优先使用 main.ts，回退到 main.js
+      let entryFile = '/main.js'
+      try {
+        await fileService.stat('/main.ts')
+        entryFile = '/main.ts'
+      }
+      catch {
+        // main.ts 不存在，使用 main.js
+      }
+
       // CSS plugin — must come before fs-loader so its load() wins for .css files
       const cssPlugin = cssInline(async (id) => {
         try {
@@ -130,7 +140,7 @@ export function useAutoCompile(fsLoading: Ref<boolean>): AutoCompileResult {
 
       // 配置 Rollup 编译选项
       const rollupOptions = {
-        input: '/main.js',
+        input: entryFile,
         fs: fileService,
         external: ['cesium', 'Sandcastle'],
         plugins: [
@@ -139,7 +149,7 @@ export function useAutoCompile(fsLoading: Ref<boolean>): AutoCompileResult {
           {
             name: 'fs-loader',
             resolveId(source: string) {
-              if (source === '/main.js' || source.startsWith('/')) {
+              if (source === '/main.js' || source === '/main.ts' || source.startsWith('/')) {
                 return source
               }
               return { id: source, external: true }
