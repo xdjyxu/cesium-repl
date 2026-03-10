@@ -10,6 +10,7 @@ const props = defineProps<{
 }>()
 
 const editorService = useEditorService()
+const { saveFile } = useSaveFile()
 
 // Monaco Editor 容器引用
 const editorContainerRef = ref<HTMLDivElement>()
@@ -23,6 +24,17 @@ onMounted(async () => {
     return
 
   editor = await editorService.createEditor(editorContainerRef.value)
+
+  // 注册 Ctrl+S / Cmd+S 保存快捷键
+  editor.addCommand(
+    // KeyMod.CtrlCmd | KeyCode.KeyS
+    2048 | 49,
+    () => {
+      if (props.activeFilePath) {
+        saveFile(props.activeFilePath)
+      }
+    },
+  )
 
   // 如果初始化时已有激活文件，立即设置 model
   if (props.activeFilePath) {

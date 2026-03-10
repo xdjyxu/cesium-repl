@@ -5,6 +5,7 @@ import { registerArtifactService } from './artifactService/common/useArtifactSer
 import { registerServerCompileService } from './compileService/node/useCompileService'
 import { registerServerEditorService } from './editorService/node/useEditorService'
 import { registerFileService } from './fileService/common/useFileService'
+import { registerServerLockService } from './lockService/node/useLockService'
 import { registerServerMonacoLoaderService } from './monacoLoaderService/node/useMonacoLoaderService'
 import { registerServerProfileService } from './profileService/node/useProfileService'
 import { registerServerStoreService } from './storeService/node/useStoreService'
@@ -19,6 +20,7 @@ const useServices: UseServices = () => {
 
   registerArtifactService(p)
   registerFileService(p)
+  registerServerLockService(p)
   registerTabService(p)
   registerServerStoreService(p)
   registerServerProfileService(p)

@@ -117,6 +117,21 @@ export interface EditorService {
   createEditor: (container: HTMLElement) => Promise<monaco.editor.IStandaloneCodeEditor>
 
   /**
+   * 保存 Model 内容到 FileService
+   * 将 Monaco Model 的当前内容写入虚拟文件系统
+   * @param path 文件路径
+   * @returns 保存是否成功
+   */
+  saveModel: (path: string) => Promise<boolean>
+
+  /**
+   * 获取 Model 的当前内容
+   * @param path 文件路径
+   * @returns Model 内容，如果 Model 不存在则返回 null
+   */
+  getModelContent: (path: string) => string | null
+
+  /**
    * 释放所有资源
    */
   dispose: () => void

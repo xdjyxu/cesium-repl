@@ -3,7 +3,9 @@ import type { EditorService, FileLanguage, ModelContentChangeEvent } from '../co
 import CESIUM_MODULE_DECLARATION from 'cesium/Source/Cesium.d.ts?raw'
 import { BehaviorSubject, Subject } from 'rxjs'
 import { SANDCASTLE_MODULE_DECLARATION } from '~/utils/sandcastle'
+import { FileService } from '../../fileService/common/protocol'
 import { Autowired, PostInject } from '../../inject'
+import { LockService } from '../../lockService/common/protocol'
 import { MonacoLoaderService } from '../../monacoLoaderService/common/protocol'
 import {
   DEFAULT_LANGUAGE,
@@ -19,6 +21,18 @@ export class EditorServiceImpl implements EditorService {
    */
   @Autowired(MonacoLoaderService)
   private readonly _monacoLoader!: MonacoLoaderService
+
+  /**
+   * File 服务（自动注入）
+   */
+  @Autowired(FileService)
+  private readonly _fileService!: FileService
+
+  /**
+   * Lock 服务（自动注入）
+   */
+  @Autowired(LockService)
+  private readonly _lockService!: LockService
 
   /**
    * Monaco 实例（在初始化后可用）
@@ -54,6 +68,11 @@ export class EditorServiceImpl implements EditorService {
    * 存储 model 的监听器，用于清理
    */
   private readonly _modelListeners = new Map<string, { dispose: () => void }>()
+
+  /**
+   * 存储每个文件在 FileService 中的最后保存内容（用于判断 dirty 状态）
+   */
+  private readonly _savedContents = new Map<string, string>()
 
   /**
    * 初始化方法，在依赖注入后自动执行
@@ -134,14 +153,32 @@ export class EditorServiceImpl implements EditorService {
 
     // 添加新的监听器
     const listener = model.onDidChangeContent((e) => {
+      const content = model.getValue()
       this._modelContentChangeSubject.next({
         path,
-        content: model.getValue(),
+        content,
         changes: e,
       })
+
+      // 检查 dirty 状态
+      this._updateDirtyState(path, content)
     })
 
     this._modelListeners.set(path, listener)
+  }
+
+  /**
+   * 更新文件的 dirty 状态
+   */
+  private _updateDirtyState(path: string, currentContent: string): void {
+    const savedContent = this._savedContents.get(path)
+    if (savedContent === undefined) {
+      // 文件刚创建，还没有保存过，不标记为 dirty
+      return
+    }
+
+    const isDirty = currentContent !== savedContent
+    this._lockService.setDirty(path, isDirty)
   }
 
   /**
@@ -202,6 +239,9 @@ export class EditorServiceImpl implements EditorService {
     const detectedLanguage = language || this.detectLanguage(path)
     model = monaco.editor.createModel(content, detectedLanguage, uri)
 
+    // 记录初始保存内容（创建时即为已保存状态）
+    this._savedContents.set(path, content)
+
     // 为新创建的 model 添加变化监听器
     this._attachModelListener(path, model)
 
@@ -247,7 +287,46 @@ export class EditorServiceImpl implements EditorService {
       model.dispose()
       // 更新文件列表
       this._filesSubject.next(this._filesSubject.value.filter(p => p !== path))
+      // 清除保存内容记录
+      this._savedContents.delete(path)
+      // 清除锁定状态
+      this._lockService.remove(path)
     }
+  }
+
+  /**
+   * 保存 Model 内容到 FileService
+   */
+  async saveModel(path: string): Promise<boolean> {
+    const model = this.getModel(path)
+    if (!model) {
+      return false
+    }
+
+    try {
+      const content = model.getValue()
+      await this._fileService.writeFile(path, content)
+
+      // 更新保存内容记录
+      this._savedContents.set(path, content)
+
+      // 清除 dirty 状态
+      this._lockService.setDirty(path, false)
+
+      return true
+    }
+    catch (error) {
+      console.error(`Failed to save model ${path}:`, error)
+      return false
+    }
+  }
+
+  /**
+   * 获取 Model 的当前内容
+   */
+  getModelContent(path: string): string | null {
+    const model = this.getModel(path)
+    return model ? model.getValue() : null
   }
 
   /**
@@ -275,6 +354,9 @@ export class EditorServiceImpl implements EditorService {
     // 清理所有监听器
     this._modelListeners.forEach(listener => listener.dispose())
     this._modelListeners.clear()
+
+    // 清空保存内容记录
+    this._savedContents.clear()
 
     // 关闭 Subject
     this._modelContentChangeSubject.complete()

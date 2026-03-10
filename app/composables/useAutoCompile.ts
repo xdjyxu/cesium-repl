@@ -81,6 +81,8 @@ async function inlineCssLinks(
  * - JS/TS 中 `import './foo.css'` 的样式会被收集并注入到 HTML `<head>` 内
  * - HTML 中的 `<link rel="stylesheet" href="...">` 会被替换为内联 `<style>` 块
  *
+ * 编译源：从 FileService 读取已保存的文件内容（未保存的编辑不会被编译）
+ *
  * @param fsLoading - 文件系统加载状态（来自 useExampleLoader 的 state.loading）
  *
  * @example
