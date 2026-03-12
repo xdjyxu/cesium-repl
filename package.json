@@ -6,25 +6,45 @@
     "lint": "eslint --fix",
     "build": "nuxt build",
     "dev": "nuxt dev",
+    "dev:remote": "ENABLE_REMOTE_CONTENT=true nuxt dev",
     "generate": "nuxt generate",
+    "generate:remote": "ENABLE_REMOTE_CONTENT=true nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "typecheck": "nuxt typecheck",
+    "postinstall": "nuxt prepare",
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "dependencies": {
+    "@monaco-editor/loader": "^1.7.0",
+    "@nuxt/content": "^3.11.0",
+    "@rollup/browser": "^4.50.2",
+    "@swc/wasm-web": "^1.15.8",
     "@unocss/nuxt": "^66.5.0",
     "@vueuse/core": "^13.9.0",
     "@vueuse/rxjs": "^14.0.0-alpha.0",
+    "better-sqlite3": "^12.6.2",
+    "cesium": "^1.137.0",
     "memfs": "^4.38.2",
+    "monaco-editor": "^0.55.1",
     "nuxt": "^4.1.1",
+    "pako": "^2.1.0",
+    "rollup": "^4.50.2",
     "rxjs": "^7.8.2",
+    "smob": "^1.5.0",
+    "typescript": "^5.9.2",
     "unocss": "^66.5.0",
     "vue": "^3.5.20",
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^5.2.2",
+    "@iconify-json/carbon": "^1.2.18",
+    "@types/pako": "^2.0.4",
     "@unocss/eslint-plugin": "^66.5.0",
     "eslint": "^9.34.0",
-    "eslint-plugin-format": "^1.0.1"
+    "eslint-plugin-format": "^1.0.1",
+    "vite-plugin-node-polyfills": "^0.25.0",
+    "vitest": "^4.0.16"
   }
 }

@@ -1,0 +1,198 @@
+import type { Ref } from 'vue'
+import type { CompileState } from './compileService/common/protocol'
+import { useObservable } from '@vueuse/rxjs'
+import { useArtifactService } from './artifactService/common/useArtifactService'
+import { cssInline } from './compileService/browser/css-inline-plugin'
+import { swcWasm } from './compileService/browser/swc-wasm-plugin'
+import { useCompileService } from './compileService/browser/useCompileService'
+import { useFileService } from './fileService/common/useFileService'
+
+/**
+ * 编译结果
+ */
+export interface CompileResult {
+  /**
+   * 编译状态（响应式）
+   */
+  compileState: Ref<CompileState | undefined>
+
+  /**
+   * 执行编译
+   */
+  compile: () => Promise<void>
+}
+
+/**
+ * Replace `<link rel="stylesheet" href="...">` tags in HTML with inline `<style>` blocks.
+ * Remote URLs (http/https/protocol-relative) are left untouched.
+ */
+async function inlineCssLinks(
+  html: string,
+  loadFile: (path: string) => Promise<string>,
+): Promise<string> {
+  // Matches both attribute orderings: rel before href and href before rel
+  const linkRe = /<link[^>]+rel=["']stylesheet["'][^>]*>/gi
+  const matches = [...html.matchAll(linkRe)]
+
+  let result = html
+  for (const match of matches) {
+    const tag = match[0]
+    const hrefMatch = tag.match(/href=["']([^"']+)["']/)
+    if (!hrefMatch)
+      continue
+
+    const href = hrefMatch[1]
+    if (!href)
+      continue
+
+    // Skip remote URLs
+    if (/^(?:https?:)?\/\//i.test(href))
+      continue
+
+    // Normalize to absolute path for fileService
+    const absolutePath = href.startsWith('/') ? href : `/${href}`
+
+    try {
+      const css = await loadFile(absolutePath)
+      result = result.replace(tag, `<style>\n${css}\n</style>`)
+    }
+    catch {
+      // File not found — keep the original tag
+    }
+  }
+
+  return result
+}
+
+/**
+ * 核心编译组合式函数
+ *
+ * 提供编译状态和手动触发编译的能力。
+ * 编译源：从 FileService 读取已保存的文件内容（未保存的编辑不会被编译）。
+ *
+ * @example
+ * ```vue
+ * <script setup>
+ * const { compile, compileState } = useCompile()
+ * await compile()
+ * </script>
+ * ```
+ */
+export function useCompile(): CompileResult {
+  const compileService = useCompileService()
+  const fileService = useFileService()
+  const artifactService = useArtifactService()
+
+  // 订阅编译状态
+  const compileState = useObservable(compileService.state$)
+
+  /**
+   * 执行编译
+   */
+  async function compile() {
+    try {
+      // 获取 index.html 的内容
+      let htmlContent = ''
+      try {
+        htmlContent = await fileService.readFile('/index.html', { encoding: 'utf8' })
+      }
+      catch {
+        // 文件不存在时忽略
+      }
+
+      // 动态检测入口文件：优先使用 main.ts，回退到 main.js
+      let entryFile = '/main.js'
+      try {
+        await fileService.stat('/main.ts')
+        entryFile = '/main.ts'
+      }
+      catch {
+        // main.ts 不存在，使用 main.js
+      }
+
+      // CSS plugin — must come before fs-loader so its load() wins for .css files
+      const cssPlugin = cssInline(async (id) => {
+        try {
+          return await fileService.readFile(id, { encoding: 'utf8' })
+        }
+        catch {
+          return null
+        }
+      })
+
+      // 配置 Rollup 编译选项
+      const rollupOptions = {
+        input: entryFile,
+        fs: fileService,
+        external: ['cesium', 'Sandcastle'],
+        plugins: [
+          cssPlugin,
+          // 文件加载插件：从 fileService 读取文件内容
+          {
+            name: 'fs-loader',
+            resolveId(source: string) {
+              if (source === '/main.js' || source === '/main.ts' || source.startsWith('/')) {
+                return source
+              }
+              return { id: source, external: true }
+            },
+            async load(id: string) {
+              try {
+                return await fileService.readFile(id, { encoding: 'utf8' })
+              }
+              catch {
+                return null
+              }
+            },
+          },
+          // SWC 编译插件
+          swcWasm(),
+        ],
+        output: {
+          format: 'es' as const,
+        },
+      }
+
+      // 执行编译
+      const result = await compileService.compile(rollupOptions)
+
+      // 提取编译后的代码
+      if (result?.[0]?.output?.[0]) {
+        const output = result[0].output[0]
+        const compiledJs = 'code' in output ? output.code : ''
+
+        // 1. Inline <link rel="stylesheet"> in HTML
+        let processedHtml = await inlineCssLinks(
+          htmlContent,
+          path => fileService.readFile(path, { encoding: 'utf8' }),
+        )
+
+        // 2. Append CSS collected from JS/TS imports
+        const collectedCss = cssPlugin.getCollectedCss()
+        if (collectedCss) {
+          const styleTag = `<style>\n${collectedCss}\n</style>`
+          processedHtml = processedHtml.includes('</head>')
+            ? processedHtml.replace('</head>', `${styleTag}\n</head>`)
+            : `${processedHtml}\n${styleTag}`
+        }
+
+        artifactService.setArtifact({
+          code: compiledJs,
+          html: processedHtml,
+        })
+      }
+    }
+    catch (error) {
+      // 忽略"编译进行中"的并发错误，其他错误记录日志
+      if (!(error instanceof Error) || !error.message.includes('already in progress')) {
+        console.error('Compilation failed:', error)
+      }
+      artifactService.setArtifact(null)
+    }
+  }
+
+  return {
+    compileState,
+    compile,
+  }
+}

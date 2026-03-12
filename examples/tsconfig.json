@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["ESNext", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowJs": true,
+    "checkJs": false,
+    "strict": false,
+    "noEmit": true
+  },
+  "files": [
+    "../app/utils/sandcastle/sandcastle.d.ts"
+  ],
+  "include": [
+    "**/*.ts",
+    "**/*.js"
+  ]
+}
