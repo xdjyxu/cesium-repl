@@ -42,5 +42,13 @@ export class ServerEditorServiceImpl implements EditorService {
     return Promise.reject(new Error('EditorService is not available in SSR context'))
   }
 
+  saveModel(_path: string): Promise<boolean> {
+    return Promise.resolve(false)
+  }
+
+  getModelContent(_path: string): string | null {
+    return null
+  }
+
   dispose(): void {}
 }

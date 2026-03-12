@@ -1,7 +1,7 @@
 import type { Profile, ProfileService, Theme } from '../common/protocol'
 import { BehaviorSubject } from 'rxjs'
 
-const DEFAULT_PROFILE: Profile = { theme: 'auto', cesiumAccessToken: undefined }
+const DEFAULT_PROFILE: Profile = { theme: 'auto', cesiumAccessToken: undefined, autoCompile: true }
 
 /**
  * 服务端配置服务实现
@@ -24,6 +24,10 @@ export class ServerProfileServiceImpl implements ProfileService {
   }
 
   async setAccessToken(_token: string | undefined): Promise<void> {
+    // noop on server
+  }
+
+  async setAutoCompile(_enabled: boolean): Promise<void> {
     // noop on server
   }
 

@@ -74,15 +74,12 @@ export function useSaveFile(): SaveFileResult {
    * 获取所有 dirty 文件路径
    */
   function getDirtyFiles(): string[] {
-    const lockStates = lockService.lockStates$.value
     const dirtyFiles: string[] = []
-
-    lockStates.forEach((state) => {
+    lockService.getLockStates().forEach((state) => {
       if (state.dirty) {
         dirtyFiles.push(state.path)
       }
     })
-
     return dirtyFiles
   }
 

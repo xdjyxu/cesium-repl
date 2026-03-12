@@ -119,6 +119,7 @@ export class ProfileServiceImpl implements ProfileService {
     return {
       theme: 'auto',
       cesiumAccessToken: undefined,
+      autoCompile: true,
     }
   }
 
@@ -160,6 +161,17 @@ export class ProfileServiceImpl implements ProfileService {
     const newProfile: Profile = {
       ...currentProfile,
       cesiumAccessToken: token || undefined,
+    }
+
+    this._profileSubject.next(newProfile)
+    await this._saveProfile(newProfile)
+  }
+
+  async setAutoCompile(enabled: boolean): Promise<void> {
+    const currentProfile = this.getProfile()
+    const newProfile: Profile = {
+      ...currentProfile,
+      autoCompile: enabled,
     }
 
     this._profileSubject.next(newProfile)

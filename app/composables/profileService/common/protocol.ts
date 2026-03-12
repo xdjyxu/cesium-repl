@@ -19,6 +19,11 @@ export interface Profile {
    * Cesium Ion 访问令牌（可选，留空则使用默认公共令牌）
    */
   cesiumAccessToken?: string
+
+  /**
+   * 自动编译：保存文件后自动触发编译并更新沙箱
+   */
+  autoCompile?: boolean
 }
 
 /**
@@ -57,6 +62,12 @@ export interface ProfileService {
    * @param token - 访问令牌，传 undefined 则清除自定义令牌
    */
   setAccessToken: (token: string | undefined) => Promise<void>
+
+  /**
+   * 设置自动编译开关
+   * @param enabled - 是否启用自动编译
+   */
+  setAutoCompile: (enabled: boolean) => Promise<void>
 
   /**
    * 释放所有资源

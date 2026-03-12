@@ -43,6 +43,10 @@ export class LockServiceImpl implements LockService {
     this._lockChangeSubject.next({ type: pinned ? 'pin' : 'unpin', path })
   }
 
+  getLockStates(): Map<string, FileLockState> {
+    return this._lockStatesSubject.value
+  }
+
   getLockState(path: string): FileLockState {
     const states = this._lockStatesSubject.value
     return states.get(path) || { path, dirty: false, pinned: false }

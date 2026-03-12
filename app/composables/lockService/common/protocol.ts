@@ -55,6 +55,11 @@ export interface LockService {
   setPinned: (path: string, pinned: boolean) => void
 
   /**
+   * 获取所有文件的锁定状态（同步）
+   */
+  getLockStates: () => Map<string, FileLockState>
+
+  /**
    * 获取文件的锁定状态
    * @param path 文件路径
    * @returns 锁定状态，如果文件不存在则返回默认状态

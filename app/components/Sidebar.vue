@@ -33,6 +33,7 @@ const profile = useObservable(profileService.profile$)
 const currentTheme = computed(() => profile.value?.theme ?? 'auto')
 const tokenInput = ref(profile.value?.cesiumAccessToken ?? '')
 const isTokenVisible = ref(false)
+const autoCompile = computed(() => profile.value?.autoCompile ?? true)
 
 watch(
   () => profile.value?.cesiumAccessToken,
@@ -163,6 +164,27 @@ function handleTokenBlur() {
                   <div :class="isTokenVisible ? 'i-carbon-view-off' : 'i-carbon-view'" class="text-base" />
                 </button>
               </div>
+            </div>
+
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="text-sm text-gray-700 dark:text-gray-300">Auto Compile</label>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  保存文件后自动编译并更新沙箱
+                </p>
+              </div>
+              <button
+                type="button"
+                class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+                :class="autoCompile ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'"
+                :title="autoCompile ? 'Disable auto compile' : 'Enable auto compile'"
+                @click="profileService.setAutoCompile(!autoCompile)"
+              >
+                <span
+                  class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                  :class="autoCompile ? 'translate-x-4' : 'translate-x-0'"
+                />
+              </button>
             </div>
           </div>
         </div>

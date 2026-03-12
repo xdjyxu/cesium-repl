@@ -15,6 +15,8 @@ export class ServerLockServiceImpl implements LockService {
   setDirty(_path: string, _dirty: boolean): void {}
   setPinned(_path: string, _pinned: boolean): void {}
 
+  getLockStates(): Map<string, FileLockState> { return new Map() }
+
   getLockState(path: string): FileLockState {
     return { ...DEFAULT_STATE, path }
   }
