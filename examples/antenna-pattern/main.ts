@@ -1,6 +1,13 @@
 import * as Cesium from 'cesium'
 import Sandcastle from 'Sandcastle'
 
+import dir2900 from './dir-2900.js'
+import dir3100 from './dir-3100.js'
+import dir3400 from './dir-3400.js'
+import omni2900 from './omni-2900.js'
+import omni3050 from './omni-3050.js'
+import omni3200 from './omni-3200.js'
+
 // #region 天线类型枚举
 
 /** 天线方向图类型，决定 CSV 数据的解析方式 */
@@ -300,19 +307,21 @@ class AntennaPatternPrimitive {
       this._wireframe.show = v
   }
 
-  /** 外部传入姿态变换矩阵，直接更新 modelMatrix，无需重建 geometry */
-  setTransform(transform: Cesium.Matrix4): void {
-    if (Cesium.Matrix4.equals(transform, this._modelMatrix))
+  /** 位置与姿态变换矩阵，与 Cesium Primitive.modelMatrix 语义一致 */
+  get modelMatrix(): Cesium.Matrix4 { return this._modelMatrix }
+  set modelMatrix(v: Cesium.Matrix4) {
+    if (Cesium.Matrix4.equals(v, this._modelMatrix))
       return
-    Cesium.Matrix4.clone(transform, this._modelMatrix)
+    Cesium.Matrix4.clone(v, this._modelMatrix)
     if (this._mesh)
       Cesium.Matrix4.clone(this._modelMatrix, this._mesh.modelMatrix)
     if (this._wireframe)
       Cesium.Matrix4.clone(this._modelMatrix, this._wireframe.modelMatrix)
   }
 
-  async loadCSV(url: string, type: AntennaType): Promise<void> {
-    const text = await (await fetch(url)).text()
+  async loadCSV(urlOrText: string, type: AntennaType): Promise<void> {
+    const isUrl = /^https?:\/\/|^\//.test(urlOrText)
+    const text = isUrl ? await (await fetch(urlOrText)).text() : urlOrText
     this.setData(parseCSV(text), type)
   }
 
@@ -367,29 +376,54 @@ class AntennaPatternPrimitive {
 
 type MotionMode = 'static' | 'tilt-spin' | 'figure8'
 
-/** 根据运动模式和时间 t（秒）计算带姿态旋转的 ENU 变换矩阵 */
-function computeTransform(baseEnu: Cesium.Matrix4, mode: MotionMode, t: number): Cesium.Matrix4 {
-  if (mode === 'static')
+/** static / tilt-spin 模式下根据时间 t 计算 modelMatrix（原地，不移动位置） */
+function computeStaticTransform(baseEnu: Cesium.Matrix4, mode: MotionMode, t: number): Cesium.Matrix4 {
+  if (mode !== 'tilt-spin')
     return baseEnu
-
-  let q: Cesium.Quaternion
-  if (mode === 'tilt-spin') {
-    const qTilt = Cesium.Quaternion.fromAxisAngle(Cesium.Cartesian3.UNIT_X, Cesium.Math.toRadians(30), new Cesium.Quaternion())
-    const qSpin = Cesium.Quaternion.fromAxisAngle(Cesium.Cartesian3.UNIT_Z, (t / 20) * Cesium.Math.TWO_PI, new Cesium.Quaternion())
-    q = Cesium.Quaternion.multiply(qSpin, qTilt, new Cesium.Quaternion())
-  }
-  else {
-    const phase = (t / 30) * Cesium.Math.TWO_PI
-    const qAz = Cesium.Quaternion.fromAxisAngle(Cesium.Cartesian3.UNIT_Z, Math.sin(phase) * Cesium.Math.toRadians(60), new Cesium.Quaternion())
-    const qEl = Cesium.Quaternion.fromAxisAngle(Cesium.Cartesian3.UNIT_X, Math.sin(2 * phase) * Cesium.Math.toRadians(25), new Cesium.Quaternion())
-    q = Cesium.Quaternion.multiply(qAz, qEl, new Cesium.Quaternion())
-  }
+  const qTilt = Cesium.Quaternion.fromAxisAngle(Cesium.Cartesian3.UNIT_X, Cesium.Math.toRadians(30), new Cesium.Quaternion())
+  const qSpin = Cesium.Quaternion.fromAxisAngle(Cesium.Cartesian3.UNIT_Z, (t / 20) * Cesium.Math.TWO_PI, new Cesium.Quaternion())
+  const q = Cesium.Quaternion.multiply(qSpin, qTilt, new Cesium.Quaternion())
   const rotMat4 = Cesium.Matrix4.fromRotationTranslation(
     Cesium.Matrix3.fromQuaternion(q, new Cesium.Matrix3()),
     Cesium.Cartesian3.ZERO,
     new Cesium.Matrix4(),
   )
   return Cesium.Matrix4.multiply(baseEnu, rotMat4, new Cesium.Matrix4())
+}
+
+// 8字飞行参数：Lissajous x=R·sin(2φ), y=R·sin(φ)，高度随 cos(2φ) 起伏
+const FIGURE8_PERIOD = 40 // 秒/圈
+const FIGURE8_RADIUS = 20000 // 水平半径（米）
+const FIGURE8_HEIGHT = 3000 // 高度振幅（米）
+
+/** 根据相位 φ 计算 ENU 局部坐标（高度始终为正，范围 [0, 2·FIGURE8_HEIGHT]） */
+function figure8Enu(phi: number): Cesium.Cartesian3 {
+  return new Cesium.Cartesian3(
+    FIGURE8_RADIUS * Math.sin(2 * phi),
+    FIGURE8_RADIUS * Math.sin(phi),
+    FIGURE8_HEIGHT * (1 - Math.cos(2 * phi)), // [0, 2H]，最低点与天线同高
+  )
+}
+
+/** 构建 figure8 的 SampledPositionProperty，采样密度 1Hz */
+function buildFigure8Position(origin: Cesium.Cartesian3, start: Cesium.JulianDate): Cesium.SampledPositionProperty {
+  const enuRot = new Cesium.Matrix3()
+  Cesium.Matrix4.getMatrix3(Cesium.Transforms.eastNorthUpToFixedFrame(origin), enuRot)
+
+  const prop = new Cesium.SampledPositionProperty()
+  prop.forwardExtrapolationType = Cesium.ExtrapolationType.HOLD
+  prop.backwardExtrapolationType = Cesium.ExtrapolationType.HOLD
+
+  const SAMPLES = FIGURE8_PERIOD // 1Hz 采样
+  for (let i = 0; i <= SAMPLES; i++) {
+    const t = (i / SAMPLES) * FIGURE8_PERIOD
+    const phi = (t / FIGURE8_PERIOD) * Cesium.Math.TWO_PI
+    const enuOffset = figure8Enu(phi)
+    const ecefOffset = Cesium.Matrix3.multiplyByVector(enuRot, enuOffset, new Cesium.Cartesian3())
+    const pos = Cesium.Cartesian3.add(origin, ecefOffset, new Cesium.Cartesian3())
+    prop.addSample(Cesium.JulianDate.addSeconds(start, t, new Cesium.JulianDate()), pos)
+  }
+  return prop
 }
 
 // #endregion
@@ -408,9 +442,9 @@ const viewer = new Cesium.Viewer('cesiumContainer', {
 
 viewer.scene.debugShowFramesPerSecond = true
 
-// 循环时间轴：60s 一个周期
+// 循环时间轴：一个 figure8 周期
 const start = Cesium.JulianDate.now()
-const stop = Cesium.JulianDate.addSeconds(start, 60, new Cesium.JulianDate())
+const stop = Cesium.JulianDate.addSeconds(start, FIGURE8_PERIOD, new Cesium.JulianDate())
 viewer.clock.startTime = start.clone()
 viewer.clock.stopTime = stop.clone()
 viewer.clock.currentTime = start.clone()
@@ -419,10 +453,17 @@ viewer.clock.multiplier = 1
 viewer.timeline?.zoomTo(start, stop)
 
 const antennaPosition = Cesium.Cartesian3.fromDegrees(LON, LAT, ALT)
+const baseEnu = Cesium.Transforms.eastNorthUpToFixedFrame(antennaPosition)
+const figure8Position = buildFigure8Position(antennaPosition, start)
+const staticPosition = new Cesium.ConstantPositionProperty(antennaPosition)
+const velocityOrientation = new Cesium.VelocityOrientationProperty(figure8Position)
 
-viewer.entities.add({
-  position: antennaPosition,
-  point: { pixelSize: 10, color: Cesium.Color.RED },
+let motionMode: MotionMode = 'static'
+
+const antennaEntity = viewer.entities.add({
+  position: staticPosition,
+  orientation: velocityOrientation,
+  point: { pixelSize: 10, color: Cesium.Color.YELLOW },
   label: {
     text: '天线',
     font: '14px sans-serif',
@@ -432,39 +473,57 @@ viewer.entities.add({
     style: Cesium.LabelStyle.FILL_AND_OUTLINE,
     pixelOffset: new Cesium.Cartesian2(0, -20),
   },
+  path: {
+    show: new Cesium.CallbackProperty(() => motionMode === 'figure8', false),
+    width: 2,
+    material: new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.2, color: Cesium.Color.YELLOW }),
+    leadTime: 0,
+    trailTime: FIGURE8_PERIOD,
+  },
 })
 
 const antennaPrimitive = new AntennaPatternPrimitive({ position: antennaPosition, maxRange: 30000 })
 viewer.scene.primitives.add(antennaPrimitive)
 
-const baseEnu = Cesium.Transforms.eastNorthUpToFixedFrame(antennaPosition)
-let motionMode: MotionMode = 'static'
-
-// 每帧计算新变换并传入 primitive，由 primitive 内部值比较决定是否重建
 viewer.scene.preUpdate.addEventListener(() => {
-  const t = Cesium.JulianDate.secondsDifference(viewer.clock.currentTime, start)
-  antennaPrimitive.setTransform(computeTransform(baseEnu, motionMode, t))
+  const time = viewer.clock.currentTime
+  const t = Cesium.JulianDate.secondsDifference(time, start)
+
+  if (motionMode === 'figure8') {
+    const pos = figure8Position.getValue(time)
+    const ori = velocityOrientation.getValue(time)
+    if (pos && ori) {
+      antennaPrimitive.modelMatrix = Cesium.Matrix4.fromRotationTranslation(
+        Cesium.Matrix3.fromQuaternion(ori as Cesium.Quaternion, new Cesium.Matrix3()),
+        pos,
+        new Cesium.Matrix4(),
+      )
+    }
+  }
+  else {
+    antennaPrimitive.modelMatrix = computeStaticTransform(baseEnu, motionMode, t)
+  }
 })
 
 // #endregion
 
 // #region 工具栏
 
-const ANTENNA_CONFIG: Record<string, { type: AntennaType, frequencies: number[] }> = {
-  全向: { type: AntennaType.Omni, frequencies: [2900, 3050, 3200] },
-  定向: { type: AntennaType.Directional, frequencies: [2900, 3100, 3400] },
+const ANTENNA_DATA: Record<string, { type: AntennaType, csvs: string[] }> = {
+  全向: { type: AntennaType.Omni, csvs: [omni2900, omni3050, omni3200] },
+  定向: { type: AntennaType.Directional, csvs: [dir2900, dir3100, dir3400] },
 }
 
 let currentKey = '全向'
 
-async function reload(key: string, freqIndex: number) {
+function reload(key: string, freqIndex: number) {
   currentKey = key
-  const { type, frequencies } = ANTENNA_CONFIG[key]
-  await antennaPrimitive.loadCSV(`/antenna/${key}/${frequencies[freqIndex]}.csv`, type)
+  const { type, csvs } = ANTENNA_DATA[key]
+  antennaPrimitive.loadCSV(csvs[freqIndex], type)
 }
 
 Sandcastle.addToolbarMenu(
-  Object.keys(ANTENNA_CONFIG).map(key => ({
+  Object.keys(ANTENNA_DATA).map(key => ({
     text: key,
     onselect: () => reload(key, 0),
   })),
@@ -477,9 +536,27 @@ Sandcastle.addToolbarMenu([
 ])
 
 Sandcastle.addToolbarMenu([
-  { text: '静止', onselect: () => { motionMode = 'static' } },
-  { text: '倾斜转圈', onselect: () => { motionMode = 'tilt-spin' } },
-  { text: '8字形绕圈', onselect: () => { motionMode = 'figure8' } },
+  {
+    text: '静止',
+    onselect: () => {
+      motionMode = 'static'
+      antennaEntity.position = staticPosition
+    },
+  },
+  {
+    text: '倾斜转圈',
+    onselect: () => {
+      motionMode = 'tilt-spin'
+      antennaEntity.position = staticPosition
+    },
+  },
+  {
+    text: '8字形绕圈',
+    onselect: () => {
+      motionMode = 'figure8'
+      antennaEntity.position = figure8Position
+    },
+  },
 ])
 
 Sandcastle.addToolbarMenu([

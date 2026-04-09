@@ -1,4 +1,4 @@
-"Theta [deg]","dB(RealizedGainTotal) [] - Freq='3.05GHz' Phi='90.0000000000002deg'","dB(RealizedGainTotal) [] - Freq='3.05GHz' Theta='90.0000000000002deg'"
+export default `"Theta [deg]","dB(RealizedGainTotal) [] - Freq='3.05GHz' Phi='90.0000000000002deg'","dB(RealizedGainTotal) [] - Freq='3.05GHz' Theta='90.0000000000002deg'"
 -180,-33.8945908846383,
 -179,-32.1240775477304,
 -178,-28.6329681258186,
@@ -539,4 +539,4 @@
 357,,2.12310405474621
 358,,2.13155126173715
 359,,2.13924192241502
-360,,2.14600475318061
+360,,2.14600475318061`
