@@ -208,6 +208,77 @@ function buildMeshPrimitive(grid: Grid): Cesium.Primitive {
   })
 }
 
+/**
+ * 原始测量数据散点：Omni 显示仰角截面（phi=0 平面），Directional 显示两个测量截面（phi=0 和 phi=90°）
+ * position 为天线本地 ENU 坐标，由 collection.modelMatrix 变换到世界坐标（与 Primitive 一致）
+ */
+function buildPointsPrimitive(rows: CsvRow[], type: AntennaType, maxRange: number): Cesium.PointPrimitiveCollection {
+  const collection = new Cesium.PointPrimitiveCollection({
+    blendOption: Cesium.BlendOption.OPAQUE,
+  })
+
+  if (type === AntennaType.Omni) {
+    const elevData = rows
+      .filter(r => r.col2 !== null && r.theta >= 0 && r.theta <= 180)
+      .sort((a, b) => a.theta - b.theta)
+    const maxLinear = Math.max(...elevData.map(r => dBToLinear(r.col2!)))
+    for (const { theta, col2 } of elevData) {
+      const norm = dBToLinear(col2!) / maxLinear
+      const r = norm * maxRange
+      const tRad = Cesium.Math.toRadians(theta)
+      const [cr, cg, cb] = gainToColor(norm)
+      collection.add({
+        position: new Cesium.Cartesian3(r * Math.sin(tRad), 0, -r * Math.cos(tRad)),
+        color: new Cesium.Color(cr, cg, cb, 1.0),
+        pixelSize: 5,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      })
+    }
+  }
+  else {
+    const phi0 = new Map<number, number>()
+    const phi90 = new Map<number, number>()
+    for (const { theta, col2, col3 } of rows) {
+      if (theta < -180 || theta > 180)
+        continue
+      if (col2 !== null)
+        phi0.set(theta, col2)
+      if (col3 !== null)
+        phi90.set(theta, col3)
+    }
+    const maxLinear = Math.max(
+      ...Array.from(phi0.values()).map(dBToLinear),
+      ...Array.from(phi90.values()).map(dBToLinear),
+    )
+    for (const [theta, db] of phi0) {
+      const norm = dBToLinear(db) / maxLinear
+      const r = norm * maxRange
+      const tRad = Cesium.Math.toRadians(theta)
+      const [cr, cg, cb] = gainToColor(norm)
+      collection.add({
+        position: new Cesium.Cartesian3(r * Math.sin(tRad), 0, r * Math.cos(tRad)),
+        color: new Cesium.Color(cr, cg, cb, 1.0),
+        pixelSize: 5,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      })
+    }
+    for (const [theta, db] of phi90) {
+      const norm = dBToLinear(db) / maxLinear
+      const r = norm * maxRange
+      const tRad = Cesium.Math.toRadians(theta)
+      const [cr, cg, cb] = gainToColor(norm)
+      collection.add({
+        position: new Cesium.Cartesian3(0, r * Math.sin(tRad), r * Math.cos(tRad)),
+        color: new Cesium.Color(cr, cg, cb, 1.0),
+        pixelSize: 5,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      })
+    }
+  }
+
+  return collection
+}
+
 function buildWireframePrimitive(grid: Grid): Cesium.Primitive {
   const tLen = grid.length
   const pLen = grid[0].length
@@ -259,6 +330,7 @@ interface AntennaPatternOptions {
   maxRange?: number
   showMesh?: boolean
   showWireframe?: boolean
+  showPoints?: boolean
 }
 
 class AntennaPatternPrimitive {
@@ -280,15 +352,18 @@ class AntennaPatternPrimitive {
   private _dataDirty = false
   private _mesh: Cesium.Primitive | null = null
   private _wireframe: Cesium.Primitive | null = null
+  private _points: Cesium.PointPrimitiveCollection | null = null
   private _destroyed = false
   private _showMesh: boolean
   private _showWireframe: boolean
+  private _showPoints: boolean
 
   constructor(options: AntennaPatternOptions) {
     this.position = options.position
     this._maxRange = options.maxRange ?? 30000
     this._showMesh = options.showMesh ?? true
     this._showWireframe = options.showWireframe ?? false
+    this._showPoints = options.showPoints ?? false
     this._baseEnu = Cesium.Transforms.eastNorthUpToFixedFrame(this.position)
     this._modelMatrix = this._baseEnu.clone()
   }
@@ -307,6 +382,13 @@ class AntennaPatternPrimitive {
       this._wireframe.show = v
   }
 
+  get showPoints(): boolean { return this._showPoints }
+  set showPoints(v: boolean) {
+    this._showPoints = v
+    if (this._points)
+      this._points.show = v
+  }
+
   /** 位置与姿态变换矩阵，与 Cesium Primitive.modelMatrix 语义一致 */
   get modelMatrix(): Cesium.Matrix4 { return this._modelMatrix }
   set modelMatrix(v: Cesium.Matrix4) {
@@ -317,6 +399,8 @@ class AntennaPatternPrimitive {
       Cesium.Matrix4.clone(this._modelMatrix, this._mesh.modelMatrix)
     if (this._wireframe)
       Cesium.Matrix4.clone(this._modelMatrix, this._wireframe.modelMatrix)
+    if (this._points)
+      Cesium.Matrix4.clone(this._modelMatrix, this._points.modelMatrix)
   }
 
   async loadCSV(urlOrText: string, type: AntennaType): Promise<void> {
@@ -337,12 +421,16 @@ class AntennaPatternPrimitive {
     const grid = buildGrid(this._rows, this._type, this.maxRange)
     this._mesh?.destroy()
     this._wireframe?.destroy()
+    this._points?.destroy()
     this._mesh = buildMeshPrimitive(grid)
     this._mesh.show = this._showMesh
     Cesium.Matrix4.clone(this._modelMatrix, this._mesh.modelMatrix)
     this._wireframe = buildWireframePrimitive(grid)
     this._wireframe.show = this._showWireframe
     Cesium.Matrix4.clone(this._modelMatrix, this._wireframe.modelMatrix)
+    this._points = buildPointsPrimitive(this._rows, this._type, this.maxRange)
+    this._points.show = this._showPoints
+    Cesium.Matrix4.clone(this._modelMatrix, this._points.modelMatrix)
     this._dataDirty = false
   }
 
@@ -355,6 +443,8 @@ class AntennaPatternPrimitive {
     this._mesh?.update(frameState)
     // @ts-expect-error Cesium type definitions omit the frameState parameter, but it is required at runtime
     this._wireframe?.update(frameState)
+    // @ts-expect-error Cesium type definitions omit the frameState parameter, but it is required at runtime
+    this._points?.update(frameState)
   }
 
   isDestroyed(): boolean { return this._destroyed }
@@ -364,8 +454,10 @@ class AntennaPatternPrimitive {
       return
     this._mesh?.destroy()
     this._wireframe?.destroy()
+    this._points?.destroy()
     this._mesh = null
     this._wireframe = null
+    this._points = null
     this._destroyed = true
   }
 }
@@ -572,6 +664,10 @@ Sandcastle.addToggleButton('轮廓线', false, (checked: boolean) => {
 
 Sandcastle.addToggleButton('面片', true, (checked: boolean) => {
   antennaPrimitive.showMesh = checked
+})
+
+Sandcastle.addToggleButton('散点', false, (checked: boolean) => {
+  antennaPrimitive.showPoints = checked
 })
 
 reload('全向', 0)
