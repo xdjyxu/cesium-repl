@@ -18,6 +18,14 @@ enum AntennaType {
   Directional = 'directional',
 }
 
+/** 定向天线 3D 插值方法 */
+enum InterpolationMethod {
+  /** dB 域 cos²/sin² 加权（ITU/3GPP 标准，对称天线效果好） */
+  CosSquared = 'cos2',
+  /** 4 点 Fourier 插值（正确处理前后不对称，过渡更平滑） */
+  Fourier = 'fourier',
+}
+
 // #endregion
 
 // #region 数据解析
@@ -47,7 +55,7 @@ interface GridCell { x: number, y: number, z: number, norm: number }
 type Grid = GridCell[][]
 
 /** 顶点坐标输出为天线本地 ENU 坐标（原点=天线位置，无姿态旋转），由 modelMatrix 在 GPU 侧完成变换 */
-function buildGrid(rows: CsvRow[], type: AntennaType, maxRange: number): Grid {
+function buildGrid(rows: CsvRow[], type: AntennaType, maxRange: number, method: InterpolationMethod = InterpolationMethod.Fourier): Grid {
   const PHI_STEPS = 73
 
   if (type === AntennaType.Omni) {
@@ -79,23 +87,75 @@ function buildGrid(rows: CsvRow[], type: AntennaType, maxRange: number): Grid {
       if (col3 !== null)
         phi90.set(theta, col3)
     }
-    const maxLinear = Math.max(
-      ...Array.from(phi0.values()).map(dBToLinear),
-      ...Array.from(phi90.values()).map(dBToLinear),
-    )
+    // 预插值：把截面数据转成可连续查询的函数
+    // 截面数据 theta=-180~+180 描述的是该截面平面内绕 z 轴一圈的增益
     const thetaValues = Array.from(phi0.keys()).sort((a, b) => a - b)
 
-    return thetaValues.map((theta) => {
-      const g0 = dBToLinear(phi0.get(theta)!) / maxLinear
-      const g90 = dBToLinear(phi90.get(theta) ?? phi0.get(theta)!) / maxLinear
-      const tRad = Cesium.Math.toRadians(theta)
+    // 线性插值查询截面增益，返回 dB 值（在 dB 域插值物理上更合理）
+    function lookupDB(map: Map<number, number>, thetaDeg: number): number {
+      // 归一化到 [-180, 180]
+      while (thetaDeg > 180) thetaDeg -= 360
+      while (thetaDeg < -180) thetaDeg += 360
+      const keys = thetaValues
+      const exact = map.get(thetaDeg)
+      if (exact !== undefined)
+        return exact
+      // 找相邻两点线性插值（dB 域）
+      let lo = keys[0]
+      let hi = keys[keys.length - 1]
+      for (let k = 0; k < keys.length - 1; k++) {
+        if (keys[k] <= thetaDeg && thetaDeg <= keys[k + 1]) {
+          lo = keys[k]
+          hi = keys[k + 1]
+          break
+        }
+      }
+      const t = (thetaDeg - lo) / (hi - lo)
+      return map.get(lo)! * (1 - t) + map.get(hi)! * t
+    }
+
+    // 两截面所有测量值中的最大 dB，用于归一化
+    const maxDB = Math.max(...Array.from(phi0.values()), ...Array.from(phi90.values()))
+
+    // 用标准球坐标遍历：theta∈[0,180]为天顶角，phi∈[0,360]为方位角
+    const THETA_STEPS = 181
+
+    return Array.from({ length: THETA_STEPS }, (_, ti) => {
+      const thetaSph = ti // 0°~180°
+      const tRad = Cesium.Math.toRadians(thetaSph)
       const sinT = Math.sin(tRad)
       const cosT = Math.cos(tRad)
-      return Array.from({ length: PHI_STEPS }, (_, i) => {
-        const pRad = Cesium.Math.toRadians(-180 + (i / (PHI_STEPS - 1)) * 360)
-        const norm = g0 * Math.cos(pRad) ** 2 + g90 * Math.sin(pRad) ** 2
+
+      // 预查4个正交方向的 dB 值
+      const g0p = lookupDB(phi0, thetaSph)
+      const g0n = lookupDB(phi0, -thetaSph)
+      const g90p = lookupDB(phi90, thetaSph)
+      const g90n = lookupDB(phi90, -thetaSph)
+
+      return Array.from({ length: PHI_STEPS }, (_, pi) => {
+        const pRad = Cesium.Math.toRadians((pi / (PHI_STEPS - 1)) * 360)
+        const cosP = Math.cos(pRad)
+        const sinP = Math.sin(pRad)
+
+        let norm: number
+        if (method === InterpolationMethod.Fourier) {
+          // 4点 Fourier：G(phi) = a0 + a1*cos(phi) + b1*sin(phi) + a2*cos(2*phi)（dB域）
+          // 精确还原 φ=0°/90°/180°/270°，正确处理前后不对称
+          const a0 = (g0p + g0n + g90p + g90n) / 4
+          const a1 = (g0p - g0n) / 2
+          const b1 = (g90p - g90n) / 2
+          const a2 = (g0p + g0n - g90p - g90n) / 4
+          norm = dBToLinear(a0 + a1 * cosP + b1 * sinP + a2 * Math.cos(2 * pRad)) / dBToLinear(maxDB)
+        }
+        else {
+          // dB域 cos²/sin² 加权（ITU/3GPP标准）
+          const db0 = cosP >= 0 ? g0p : g0n
+          const db90 = sinP >= 0 ? g90p : g90n
+          norm = dBToLinear(db0 * cosP ** 2 + db90 * sinP ** 2) / dBToLinear(maxDB)
+        }
+
         const r = norm * maxRange
-        return { x: r * sinT * Math.cos(pRad), y: r * sinT * Math.sin(pRad), z: r * cosT, norm }
+        return { x: r * sinT * cosP, y: r * sinT * sinP, z: r * cosT, norm }
       })
     })
   }
@@ -331,17 +391,27 @@ interface AntennaPatternOptions {
   showMesh?: boolean
   showWireframe?: boolean
   showPoints?: boolean
+  interpolation?: InterpolationMethod
 }
 
 class AntennaPatternPrimitive {
   readonly position: Cesium.Cartesian3
   private _maxRange: number
+  private _interpolation: InterpolationMethod
 
   get maxRange(): number { return this._maxRange }
   set maxRange(v: number) {
     if (v === this._maxRange)
       return
     this._maxRange = v
+    this._dataDirty = true
+  }
+
+  get interpolation(): InterpolationMethod { return this._interpolation }
+  set interpolation(v: InterpolationMethod) {
+    if (v === this._interpolation)
+      return
+    this._interpolation = v
     this._dataDirty = true
   }
 
@@ -361,6 +431,7 @@ class AntennaPatternPrimitive {
   constructor(options: AntennaPatternOptions) {
     this.position = options.position
     this._maxRange = options.maxRange ?? 30000
+    this._interpolation = options.interpolation ?? InterpolationMethod.Fourier
     this._showMesh = options.showMesh ?? true
     this._showWireframe = options.showWireframe ?? false
     this._showPoints = options.showPoints ?? false
@@ -418,7 +489,7 @@ class AntennaPatternPrimitive {
   private _rebuild(): void {
     if (this._destroyed || this._rows.length === 0)
       return
-    const grid = buildGrid(this._rows, this._type, this.maxRange)
+    const grid = buildGrid(this._rows, this._type, this.maxRange, this._interpolation)
     this._mesh?.destroy()
     this._wireframe?.destroy()
     this._points?.destroy()
@@ -525,7 +596,7 @@ function buildFigure8Position(origin: Cesium.Cartesian3, start: Cesium.JulianDat
 // 西安坐标（钟楼附近）
 const LON = 108.9402
 const LAT = 34.2658
-const ALT = 500
+const ALT = 5000
 
 const viewer = new Cesium.Viewer('cesiumContainer', {
   terrain: Cesium.Terrain.fromWorldTerrain(),
@@ -669,6 +740,11 @@ Sandcastle.addToggleButton('面片', true, (checked: boolean) => {
 Sandcastle.addToggleButton('散点', false, (checked: boolean) => {
   antennaPrimitive.showPoints = checked
 })
+
+Sandcastle.addToolbarMenu([
+  { text: 'Fourier 插值', onselect: () => { antennaPrimitive.interpolation = InterpolationMethod.Fourier } },
+  { text: 'dB cos² 插值', onselect: () => { antennaPrimitive.interpolation = InterpolationMethod.CosSquared } },
+])
 
 reload('全向', 0)
 
