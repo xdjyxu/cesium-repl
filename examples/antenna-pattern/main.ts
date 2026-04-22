@@ -51,11 +51,12 @@ function dBToLinear(dB: number): number {
 
 // #region 网格生成（本地坐标系，不含 ENU 变换）
 
-interface GridCell { x: number, y: number, z: number, norm: number }
+/** 顶点存归一化坐标（norm * 单位球方向），maxRange 由外部通过 modelMatrix 缩放注入，避免改范围时重建 buffer */
+interface GridCell { nx: number, ny: number, nz: number, norm: number }
 type Grid = GridCell[][]
 
-/** 顶点坐标输出为天线本地 ENU 坐标（原点=天线位置，无姿态旋转），由 modelMatrix 在 GPU 侧完成变换 */
-function buildGrid(rows: CsvRow[], type: AntennaType, maxRange: number, method: InterpolationMethod = InterpolationMethod.Fourier): Grid {
+/** 顶点坐标为归一化天线本地 ENU 坐标（已乘以 norm，范围 [0,1]），由 modelMatrix 的缩放分量完成 maxRange 变换 */
+function buildGrid(rows: CsvRow[], type: AntennaType, method: InterpolationMethod = InterpolationMethod.Fourier): Grid {
   const PHI_STEPS = 73
 
   if (type === AntennaType.Omni) {
@@ -66,13 +67,12 @@ function buildGrid(rows: CsvRow[], type: AntennaType, maxRange: number, method: 
 
     return elevData.map(({ theta, col2 }) => {
       const norm = dBToLinear(col2!) / maxLinear
-      const r = norm * maxRange
       const tRad = Cesium.Math.toRadians(theta)
       const sinT = Math.sin(tRad)
       const cosT = Math.cos(tRad)
       return Array.from({ length: PHI_STEPS }, (_, i) => {
         const pRad = Cesium.Math.toRadians((i / (PHI_STEPS - 1)) * 360)
-        return { x: r * sinT * Math.cos(pRad), y: r * sinT * Math.sin(pRad), z: -r * cosT, norm }
+        return { nx: norm * sinT * Math.cos(pRad), ny: norm * sinT * Math.sin(pRad), nz: -norm * cosT, norm }
       })
     })
   }
@@ -154,8 +154,7 @@ function buildGrid(rows: CsvRow[], type: AntennaType, maxRange: number, method: 
           norm = dBToLinear(db0 * cosP ** 2 + db90 * sinP ** 2) / dBToLinear(maxDB)
         }
 
-        const r = norm * maxRange
-        return { x: r * sinT * cosP, y: r * sinT * sinP, z: r * cosT, norm }
+        return { nx: norm * sinT * cosP, ny: norm * sinT * sinP, nz: norm * cosT, norm }
       })
     })
   }
@@ -226,8 +225,8 @@ function buildMeshPrimitive(grid: Grid): Cesium.Primitive {
       const p11 = grid[ti + 1][pi + 1]
       const p01 = grid[ti][pi + 1]
       for (const tri of [[p00, p10, p11], [p00, p11, p01]]) {
-        for (const { x, y, z, norm } of tri) {
-          positions.push(x, y, z)
+        for (const { nx, ny, nz, norm } of tri) {
+          positions.push(nx, ny, nz)
           const [r, g, b, a] = gainToColor(norm)
           colors.push(r, g, b, a)
         }
@@ -272,7 +271,8 @@ function buildMeshPrimitive(grid: Grid): Cesium.Primitive {
  * 原始测量数据散点：Omni 显示仰角截面（phi=0 平面），Directional 显示两个测量截面（phi=0 和 phi=90°）
  * position 为天线本地 ENU 坐标，由 collection.modelMatrix 变换到世界坐标（与 Primitive 一致）
  */
-function buildPointsPrimitive(rows: CsvRow[], type: AntennaType, maxRange: number): Cesium.PointPrimitiveCollection {
+/** 散点坐标同样归一化（范围 [0,1]），由 modelMatrix 的缩放分量完成 maxRange 变换 */
+function buildPointsPrimitive(rows: CsvRow[], type: AntennaType): Cesium.PointPrimitiveCollection {
   const collection = new Cesium.PointPrimitiveCollection({
     blendOption: Cesium.BlendOption.OPAQUE,
   })
@@ -284,11 +284,10 @@ function buildPointsPrimitive(rows: CsvRow[], type: AntennaType, maxRange: numbe
     const maxLinear = Math.max(...elevData.map(r => dBToLinear(r.col2!)))
     for (const { theta, col2 } of elevData) {
       const norm = dBToLinear(col2!) / maxLinear
-      const r = norm * maxRange
       const tRad = Cesium.Math.toRadians(theta)
       const [cr, cg, cb] = gainToColor(norm)
       collection.add({
-        position: new Cesium.Cartesian3(r * Math.sin(tRad), 0, -r * Math.cos(tRad)),
+        position: new Cesium.Cartesian3(norm * Math.sin(tRad), 0, -norm * Math.cos(tRad)),
         color: new Cesium.Color(cr, cg, cb, 1.0),
         pixelSize: 5,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -312,11 +311,10 @@ function buildPointsPrimitive(rows: CsvRow[], type: AntennaType, maxRange: numbe
     )
     for (const [theta, db] of phi0) {
       const norm = dBToLinear(db) / maxLinear
-      const r = norm * maxRange
       const tRad = Cesium.Math.toRadians(theta)
       const [cr, cg, cb] = gainToColor(norm)
       collection.add({
-        position: new Cesium.Cartesian3(r * Math.sin(tRad), 0, r * Math.cos(tRad)),
+        position: new Cesium.Cartesian3(norm * Math.sin(tRad), 0, norm * Math.cos(tRad)),
         color: new Cesium.Color(cr, cg, cb, 1.0),
         pixelSize: 5,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -324,11 +322,10 @@ function buildPointsPrimitive(rows: CsvRow[], type: AntennaType, maxRange: numbe
     }
     for (const [theta, db] of phi90) {
       const norm = dBToLinear(db) / maxLinear
-      const r = norm * maxRange
       const tRad = Cesium.Math.toRadians(theta)
       const [cr, cg, cb] = gainToColor(norm)
       collection.add({
-        position: new Cesium.Cartesian3(0, r * Math.sin(tRad), r * Math.cos(tRad)),
+        position: new Cesium.Cartesian3(0, norm * Math.sin(tRad), norm * Math.cos(tRad)),
         color: new Cesium.Color(cr, cg, cb, 1.0),
         pixelSize: 5,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -343,7 +340,7 @@ function buildWireframePrimitive(grid: Grid): Cesium.Primitive {
   const tLen = grid.length
   const pLen = grid[0].length
   const instances: Cesium.GeometryInstance[] = []
-  const toC3 = (cell: GridCell) => new Cesium.Cartesian3(cell.x, cell.y, cell.z)
+  const toC3 = (cell: GridCell) => new Cesium.Cartesian3(cell.nx, cell.ny, cell.nz)
   const white = (n: number) => Array.from({ length: n }, () => new Cesium.Color(1, 1, 1, 0.6))
 
   const phiStride = Math.max(1, Math.floor((pLen - 1) / 16))
@@ -404,7 +401,7 @@ class AntennaPatternPrimitive {
     if (v === this._maxRange)
       return
     this._maxRange = v
-    this._dataDirty = true
+    this._applyScale()
   }
 
   get interpolation(): InterpolationMethod { return this._interpolation }
@@ -460,18 +457,13 @@ class AntennaPatternPrimitive {
       this._points.show = v
   }
 
-  /** 位置与姿态变换矩阵，与 Cesium Primitive.modelMatrix 语义一致 */
+  /** 位置与姿态变换矩阵（不含缩放），与 Cesium Primitive.modelMatrix 语义一致；maxRange 缩放由内部自动叠加 */
   get modelMatrix(): Cesium.Matrix4 { return this._modelMatrix }
   set modelMatrix(v: Cesium.Matrix4) {
     if (Cesium.Matrix4.equals(v, this._modelMatrix))
       return
     Cesium.Matrix4.clone(v, this._modelMatrix)
-    if (this._mesh)
-      Cesium.Matrix4.clone(this._modelMatrix, this._mesh.modelMatrix)
-    if (this._wireframe)
-      Cesium.Matrix4.clone(this._modelMatrix, this._wireframe.modelMatrix)
-    if (this._points)
-      Cesium.Matrix4.clone(this._modelMatrix, this._points.modelMatrix)
+    this._applyScale()
   }
 
   async loadCSV(urlOrText: string, type: AntennaType): Promise<void> {
@@ -486,22 +478,32 @@ class AntennaPatternPrimitive {
     this._dataDirty = true
   }
 
+  /** 将当前 _modelMatrix（旋转+平移）与 maxRange 缩放合并，推送到所有子 primitive */
+  private _applyScale(): void {
+    const scaleMat = Cesium.Matrix4.fromUniformScale(this._maxRange, new Cesium.Matrix4())
+    const scaled = Cesium.Matrix4.multiply(this._modelMatrix, scaleMat, new Cesium.Matrix4())
+    if (this._mesh)
+      Cesium.Matrix4.clone(scaled, this._mesh.modelMatrix)
+    if (this._wireframe)
+      Cesium.Matrix4.clone(scaled, this._wireframe.modelMatrix)
+    if (this._points)
+      Cesium.Matrix4.clone(scaled, this._points.modelMatrix)
+  }
+
   private _rebuild(): void {
     if (this._destroyed || this._rows.length === 0)
       return
-    const grid = buildGrid(this._rows, this._type, this.maxRange, this._interpolation)
+    const grid = buildGrid(this._rows, this._type, this._interpolation)
     this._mesh?.destroy()
     this._wireframe?.destroy()
     this._points?.destroy()
     this._mesh = buildMeshPrimitive(grid)
     this._mesh.show = this._showMesh
-    Cesium.Matrix4.clone(this._modelMatrix, this._mesh.modelMatrix)
     this._wireframe = buildWireframePrimitive(grid)
     this._wireframe.show = this._showWireframe
-    Cesium.Matrix4.clone(this._modelMatrix, this._wireframe.modelMatrix)
-    this._points = buildPointsPrimitive(this._rows, this._type, this.maxRange)
+    this._points = buildPointsPrimitive(this._rows, this._type)
     this._points.show = this._showPoints
-    Cesium.Matrix4.clone(this._modelMatrix, this._points.modelMatrix)
+    this._applyScale()
     this._dataDirty = false
   }
 
