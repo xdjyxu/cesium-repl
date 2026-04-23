@@ -130,19 +130,36 @@ export function useCompile(): CompileResult {
           // 文件加载插件：从 fileService 读取文件内容
           {
             name: 'fs-loader',
-            resolveId(source: string) {
-              if (source === '/main.js' || source === '/main.ts' || source.startsWith('/')) {
+            resolveId(source: string, importer: string | undefined) {
+              if (source.startsWith('/')) {
                 return source
+              }
+              if (source.startsWith('.') && importer) {
+                // 相对路径：相对于 importer 解析为绝对路径
+                const base = importer.replace(/\/[^/]*$/, '')
+                const resolved = `${base}/${source.replace(/^\.\//, '')}`
+                // 尝试带扩展名和不带扩展名
+                return resolved
               }
               return { id: source, external: true }
             },
             async load(id: string) {
-              try {
-                return await fileService.readFile(id, { encoding: 'utf8' })
+              const candidates = [id]
+              // .js 后缀映射到对应 .ts（TS ESM 写法）
+              if (id.endsWith('.js'))
+                candidates.push(`${id.slice(0, -3)}.ts`)
+              // 无扩展名时补充 .ts / .js
+              if (!/\.[^/]+$/.test(id))
+                candidates.push(`${id}.ts`, `${id}.js`)
+              for (const path of candidates) {
+                try {
+                  return await fileService.readFile(path, { encoding: 'utf8' })
+                }
+                catch {
+                  // 继续尝试下一个
+                }
               }
-              catch {
-                return null
-              }
+              return null
             },
           },
           // SWC 编译插件
