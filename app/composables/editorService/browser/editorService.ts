@@ -81,8 +81,28 @@ export class EditorServiceImpl implements EditorService {
   @PostInject
   async initialize(): Promise<void> {
     this._monaco = await this._monacoLoader.getMonaco()
+    this._configureTypeScript(this._monaco)
     this._injectSandcastleTypes(this._monaco)
     this._injectCesiumTypes(this._monaco)
+  }
+
+  /**
+   * 配置 Monaco TypeScript/JavaScript 编译器选项和诊断选项
+   * 该 REPL 运行在 bundler 环境（Rollup/SWC），用 .js 扩展名 import .ts 文件是合法的。
+   * Monaco 内嵌 TS 只支持 NodeJs(2) moduleResolution，无法自动将 .js → .ts，
+   * 因此屏蔽 2307（模块找不到）错误，避免对正确代码产生误报。
+   */
+  private _configureTypeScript(monacoInstance: typeof monaco): void {
+    const ts = monacoInstance.typescript
+    // 忽略 TS2307 "Cannot find module" 错误
+    // bundler 环境下 import './foo.js' 会在运行时解析到 foo.ts，Monaco TS 不理解这种解析
+    const ignoredCodes = [2307, 2792]
+    for (const defaults of [ts.typescriptDefaults, ts.javascriptDefaults]) {
+      defaults.setDiagnosticsOptions({
+        ...defaults.getDiagnosticsOptions(),
+        diagnosticCodesToIgnore: ignoredCodes,
+      })
+    }
   }
 
   /**

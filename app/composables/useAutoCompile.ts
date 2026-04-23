@@ -2,9 +2,9 @@ import type { Ref } from 'vue'
 import type { CompileState } from './compileService/common/protocol'
 import type { SandcastleShareData } from './shareService/common/protocol'
 import { filter } from 'rxjs'
-import { useCompile } from './useCompile'
 import { useLockService } from './lockService/common/useLockService'
 import { useProfileService } from './profileService/browser/useProfileService'
+import { useCompile } from './useCompile'
 
 /**
  * 自动编译结果
