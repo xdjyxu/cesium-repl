@@ -6,7 +6,7 @@ import Sandcastle from 'Sandcastle'
 // 西安钟楼附近上空（与 antenna-pattern 示例同坐标，便于对比）
 const LON = 108.9402
 const LAT = 34.2658
-const ALT = 5000
+const ALT = 1050
 
 const viewer = new Cesium.Viewer('cesiumContainer', {
   terrain: Cesium.Terrain.fromWorldTerrain(),
@@ -48,7 +48,7 @@ let propAngle = 0
 /** 左/右螺旋桨节点引用 */
 let propL: Cesium.ModelNode | undefined
 let propR: Cesium.ModelNode | undefined
-/** 模型引用（坐标轴更新需要） */
+/** 模型引用（标记点放置需要） */
 let currentModel: Cesium.Model | undefined
 
 /**
@@ -65,10 +65,6 @@ const extraRotation = new Cesium.HeadingPitchRoll()
 
 /** 坐标轴是否可见 */
 let showAxes = true
-
-/** 调试原点标记（PointPrimitive），验证世界坐标计算 */
-let debugDots: Cesium.PointPrimitiveCollection | undefined
-const debugDotRefs: Cesium.PointPrimitive[] = []
 
 // ── 核心变换函数 ─────────────────────────────────────
 
@@ -92,19 +88,51 @@ function applyNodeTransform(
   node.matrix = Cesium.Matrix4.multiply(node.originalMatrix, rt, new Cesium.Matrix4())
 }
 
+// ── 节点世界矩阵（参考内部 API）─────────────────────────
+
+/**
+ * 获取节点的世界矩阵（ECEF）。
+ *
+ * 使用 Cesium 内部运行时数据：
+ *   - _runtimeNode.sceneGraph.computedModelMatrix  → modelMatrix × diag(scale)
+ *   - _runtimeNode.computedTransform              → 沿父链组合到根的完整节点变换
+ *
+ * worldMat = computedModelMatrix × computedTransform
+ *
+ * 相比手动拼接 modelMatrix × scale × node.matrix：
+ *   ✓ 已包含模型缩放
+ *   ✓ 已沿 glTF 父链组合所有祖先变换
+ *   ✓ 与渲染管线使用的矩阵完全一致
+ */
+function getNodeWorldMatrix(
+  node: Cesium.ModelNode,
+  result: Cesium.Matrix4,
+): Cesium.Matrix4 {
+  const rt = (node as any)._runtimeNode as {
+    sceneGraph?: { computedModelMatrix?: Cesium.Matrix4 }
+    computedTransform?: Cesium.Matrix4
+  } | undefined
+
+  if (rt?.computedTransform && rt?.sceneGraph?.computedModelMatrix) {
+    return Cesium.Matrix4.multiply(
+      rt.sceneGraph.computedModelMatrix,
+      rt.computedTransform,
+      result,
+    )
+  }
+
+  // 降级：内部 API 不可用时返回单位阵
+  return Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY, result)
+}
+
 // ── 坐标轴可视化 ─────────────────────────────────────
 
 /** 单个节点的坐标轴数据 */
 interface NodeAxesData {
-  /** 坐标轴线集合 */
   lines: Cesium.PolylineCollection
-  /** 坐标轴标签集合 */
   labels: Cesium.LabelCollection
-  /** 三根轴的 polyline 引用（X/Y/Z） */
   polylineRefs: any[] // Polyline[]
-  /** 三个标签引用 */
   labelRefs: Cesium.Label[]
-  /** 获取目标节点 */
   nodeGetter: () => Cesium.ModelNode | undefined
 }
 
@@ -112,12 +140,12 @@ interface NodeAxesData {
 const allAxes: NodeAxesData[] = []
 
 /**
- * 根据相机距离计算世界空间长度，保证屏幕空间约 targetPixels 像素。
+ * 根据相机距离计算世界空间长度，保证屏幕约 targetPixels 像素。
  */
 function computeWorldLength(worldPos: Cesium.Cartesian3, targetPixels: number = 60): number {
   const distance = Cesium.Cartesian3.distance(viewer.camera.position, worldPos)
   const canvasHeight = viewer.canvas.height
-  let fovY = Math.PI / 3 // 默认 60°
+  let fovY = Math.PI / 3
   const frustum = viewer.camera.frustum as { fovy?: number }
   if (frustum.fovy !== undefined) {
     fovY = frustum.fovy
@@ -125,12 +153,6 @@ function computeWorldLength(worldPos: Cesium.Cartesian3, targetPixels: number = 
   return distance * (targetPixels / canvasHeight) * 2 * Math.tan(fovY / 2)
 }
 
-/**
- * 为指定节点创建坐标轴可视化。
- *
- * Polyline 位置在每帧直接设为世界空间（ECEF）坐标，
- * 不依赖 PolylineCollection.modelMatrix 的 setter。
- */
 function createNodeAxes(
   scene: Cesium.Scene,
   nodeGetter: () => Cesium.ModelNode | undefined,
@@ -174,29 +196,9 @@ function createNodeAxes(
 }
 
 /**
- * 构建节点的世界矩阵（ECEF）。
- *
- * 完整变换链：
- *   world = model.modelMatrix × diag(scale) × node.matrix
- *
- * model.modelMatrix 包含 ENU 定位和 -10° 俯仰倾斜；
- * diag(scale) 放大模型内部坐标（scale=200）；
- * node.matrix = originalMatrix × [userTranslation × headingPitchRoll]。
+ * 每帧更新单个节点的坐标轴——直接在世界空间（ECEF）设置 polyline 位置。
  */
-function getNodeWorldMatrix(
-  model: Cesium.Model,
-  node: Cesium.ModelNode,
-  result: Cesium.Matrix4,
-): Cesium.Matrix4 {
-  const scaleMat = Cesium.Matrix4.fromUniformScale(model.scale, new Cesium.Matrix4())
-  const temp = Cesium.Matrix4.multiply(model.modelMatrix, scaleMat, new Cesium.Matrix4())
-  return Cesium.Matrix4.multiply(temp, node.matrix, result)
-}
-
-/**
- * 每帧更新单个节点的坐标轴——直接设置世界坐标，不依赖 modelMatrix setter。
- */
-function updateNodeAxes(data: NodeAxesData, model: Cesium.Model): void {
+function updateNodeAxes(data: NodeAxesData): void {
   const node = data.nodeGetter()
   if (!node || !showAxes) {
     data.lines.show = false
@@ -207,33 +209,15 @@ function updateNodeAxes(data: NodeAxesData, model: Cesium.Model): void {
   data.lines.show = true
   data.labels.show = true
 
-  // 节点世界矩阵（ECEF）
-  const worldMat = getNodeWorldMatrix(model, node, new Cesium.Matrix4())
+  const worldMat = getNodeWorldMatrix(node, new Cesium.Matrix4())
   const origin = Cesium.Matrix4.getTranslation(worldMat, new Cesium.Cartesian3())
   const rot = Cesium.Matrix4.getMatrix3(worldMat, new Cesium.Matrix3())
 
-  // 首次更新时输出调试信息
-  if (!(data as any)._debugged) {
-    (data as any)._debugged = true
-    const nodeTrans = Cesium.Matrix4.getTranslation(node.matrix, new Cesium.Cartesian3())
-    const modelCenter = Cesium.Matrix4.getTranslation(model.modelMatrix, new Cesium.Cartesian3())
-    const cartoNode = Cesium.Cartographic.fromCartesian(origin)
-    const cartoModel = Cesium.Cartographic.fromCartesian(modelCenter)
-    console.log(
-      `[axes] node="${node.name}" scale=${model.scale} ` +
-      `nodeLocal=[${nodeTrans.x.toFixed(2)},${nodeTrans.y.toFixed(2)},${nodeTrans.z.toFixed(2)}] ` +
-      `worldAlt=${cartoNode.height.toFixed(1)}m ` +
-      `modelAlt=${cartoModel.height.toFixed(1)}m ` +
-      `offsetAlt=${(cartoNode.height - cartoModel.height).toFixed(1)}m`,
-    )
-  }
-
-  // 屏幕自适应轴长（世界空间米）
   const worldLength = computeWorldLength(origin)
 
-  // 直接在 ECEF 世界空间中设置 polyline 端点
   for (let i = 0; i < 3; i++) {
-    const dir = Cesium.Matrix3.getColumn(rot, i, new Cesium.Cartesian3())
+    const raw = Cesium.Matrix3.getColumn(rot, i, new Cesium.Cartesian3())
+    const dir = Cesium.Cartesian3.normalize(raw, new Cesium.Cartesian3())
     const end = new Cesium.Cartesian3()
     Cesium.Cartesian3.add(
       origin,
@@ -243,9 +227,9 @@ function updateNodeAxes(data: NodeAxesData, model: Cesium.Model): void {
     data.polylineRefs[i].positions = [origin, end]
   }
 
-  // 标签放在轴末端外侧
   for (let i = 0; i < 3; i++) {
-    const dir = Cesium.Matrix3.getColumn(rot, i, new Cesium.Cartesian3())
+    const raw = Cesium.Matrix3.getColumn(rot, i, new Cesium.Cartesian3())
+    const dir = Cesium.Cartesian3.normalize(raw, new Cesium.Cartesian3())
     const tip = new Cesium.Cartesian3()
     Cesium.Cartesian3.add(
       origin,
@@ -256,30 +240,9 @@ function updateNodeAxes(data: NodeAxesData, model: Cesium.Model): void {
   }
 }
 
-/**
- * 更新所有节点的坐标轴。
- */
 function updateAllAxes(): void {
-  if (!currentModel) return
-
-  // 更新各节点坐标轴
-  for (let i = 0; i < allAxes.length; i++) {
-    updateNodeAxes(allAxes[i], currentModel)
-
-    // 更新对应的调试原点标记
-    if (debugDots && i < debugDotRefs.length) {
-      const node = allAxes[i].nodeGetter()
-      if (node && showAxes) {
-        const worldMat = getNodeWorldMatrix(currentModel, node, new Cesium.Matrix4())
-        debugDotRefs[i].position = Cesium.Matrix4.getTranslation(worldMat, new Cesium.Cartesian3())
-        debugDotRefs[i].show = true
-      } else {
-        debugDotRefs[i].show = false
-      }
-    }
-  }
-  if (debugDots) {
-    debugDots.show = showAxes
+  for (const data of allAxes) {
+    updateNodeAxes(data)
   }
 }
 
@@ -298,17 +261,14 @@ function logTransform(label: string): void {
 
 // ── 键盘控制（六自由度）───────────────────────────────
 
-const STEP_TRANSLATE = 0.05 // 米/次（微调）
-const STEP_TRANSLATE_FAST = 0.5 // 米/次（Shift 加速）
-const STEP_ROTATE = Cesium.Math.toRadians(2) // 弧度/次
+const STEP_TRANSLATE = 0.05
+const STEP_TRANSLATE_FAST = 0.5
+const STEP_ROTATE = Cesium.Math.toRadians(2)
 
-// 让 canvas 可聚焦，确保键盘事件到达
 viewer.canvas.setAttribute('tabindex', '0')
 viewer.canvas.style.outline = 'none'
 
-// 使用 window 级别监听，比 document 更可靠
 window.addEventListener('keydown', (e) => {
-  // 焦点在输入框/下拉框时跳过
   const tag = (e.target as HTMLElement).tagName
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
 
@@ -316,7 +276,6 @@ window.addEventListener('keydown', (e) => {
   const dt = fast ? STEP_TRANSLATE_FAST : STEP_TRANSLATE
 
   switch (e.key) {
-    // ── 平移：WASD + QE ──
     case 'w': translation.x += dt; break
     case 's': translation.x -= dt; break
     case 'a': translation.y -= dt; break
@@ -324,19 +283,16 @@ window.addEventListener('keydown', (e) => {
     case 'q': translation.z -= dt; break
     case 'e': translation.z += dt; break
 
-    // ── 旋转：方向键 ──
     case 'ArrowLeft':  extraRotation.heading -= STEP_ROTATE; break
     case 'ArrowRight': extraRotation.heading += STEP_ROTATE; break
     case 'ArrowUp':    extraRotation.pitch += STEP_ROTATE; break
     case 'ArrowDown':  extraRotation.pitch -= STEP_ROTATE; break
 
-    // ── 绕 X 轴额外旋转（非自旋）：逗号/句号 ──
     case ',': extraRotation.roll -= STEP_ROTATE; break
     case '.': extraRotation.roll += STEP_ROTATE; break
 
-    // ── 重置所有变换 ──
     case 'r':
-      if (e.ctrlKey || e.metaKey) break // 保留浏览器刷新快捷键
+      if (e.ctrlKey || e.metaKey) break
       translation.x = 0; translation.y = 0; translation.z = 0
       extraRotation.heading = 0; extraRotation.pitch = 0; extraRotation.roll = 0
       propAngle = 0
@@ -350,7 +306,6 @@ window.addEventListener('keydown', (e) => {
   logTransform('keyboard')
 })
 
-// 点击 canvas 时聚焦，确保后续键盘输入生效
 viewer.canvas.addEventListener('click', () => {
   viewer.canvas.focus()
 })
@@ -362,13 +317,11 @@ viewer.scene.preRender.addEventListener(() => {
   if (!propL || !propR) return
 
   const now = performance.now()
-  const dt = Math.min((now - lastWallTime) / 1000, 0.1) // 上限 100ms，防止切后台后突变
+  const dt = Math.min((now - lastWallTime) / 1000, 0.1)
   lastWallTime = now
 
-  // 累计螺旋桨自旋角度
   propAngle += propAngularVelocity * propDirection * dt
 
-  // 合并额外旋转 + 自旋：HeadingPitchRoll(heading, pitch, roll)
   const hpr = new Cesium.HeadingPitchRoll(
     extraRotation.heading,
     extraRotation.pitch,
@@ -378,11 +331,152 @@ viewer.scene.preRender.addEventListener(() => {
   applyNodeTransform(propL, translation, hpr)
   applyNodeTransform(propR, translation, hpr)
 
-  // 更新所有节点坐标轴
   updateAllAxes()
 })
 
-// ── 模型加载与初始化 ─────────────────────────────────
+// #endregion
+
+// #region 标记点 & 移动节点到点
+
+/**
+ * 标记点 Entity。
+ * - Shift+Click 手动放置到点击位置
+ * - 直接点「移动」按钮时，未放置则自动放到模型附近（100m 偏移）
+ */
+const targetPoint = viewer.entities.add({
+  position: new Cesium.ConstantPositionProperty(Cesium.Cartesian3.ZERO),
+  point: {
+    pixelSize: 12,
+    color: Cesium.Color.YELLOW,
+    outlineColor: Cesium.Color.BLACK,
+    outlineWidth: 2,
+    disableDepthTestDistance: Number.POSITIVE_INFINITY,
+  },
+  label: {
+    text: '目标',
+    font: 'bold 14px sans-serif',
+    fillColor: Cesium.Color.YELLOW,
+    outlineColor: Cesium.Color.BLACK,
+    outlineWidth: 2,
+    style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+    verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+    pixelOffset: new Cesium.Cartesian2(0, -12),
+    disableDepthTestDistance: Number.POSITIVE_INFINITY,
+  },
+  show: false,
+})
+
+/** 将标记点放到模型附近（模型中心 + 100m 向 X 偏移） */
+function placeTargetNearModel(): void {
+  if (!currentModel) return
+  const modelCenter = Cesium.Matrix4.getTranslation(
+    currentModel.modelMatrix,
+    new Cesium.Cartesian3(),
+  )
+  const modelRot = Cesium.Matrix4.getMatrix3(
+    currentModel.modelMatrix,
+    new Cesium.Matrix3(),
+  )
+  // 模型前方（X轴）100m
+  const xDir = Cesium.Matrix3.getColumn(modelRot, 0, new Cesium.Cartesian3())
+  const pos = new Cesium.Cartesian3()
+  Cesium.Cartesian3.add(
+    modelCenter,
+    Cesium.Cartesian3.multiplyByScalar(xDir, 100, new Cesium.Cartesian3()),
+    pos,
+  )
+  ;(targetPoint.position as Cesium.ConstantPositionProperty).setValue(pos)
+  targetPoint.show = true
+  const carto = Cesium.Cartographic.fromCartesian(pos)
+  console.log(
+    `[point] 标记点(自动): lon ${Cesium.Math.toDegrees(carto.longitude).toFixed(6)}°, ` +
+    `lat ${Cesium.Math.toDegrees(carto.latitude).toFixed(6)}°, alt ${carto.height.toFixed(1)}m`,
+  )
+}
+
+// Shift+Click 手动放置
+const clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.canvas)
+clickHandler.setInputAction(
+  (movement: { position: Cesium.Cartesian2 }) => {
+    const pos = viewer.scene.pickPosition(movement.position)
+    if (Cesium.defined(pos)) {
+      ;(targetPoint.position as Cesium.ConstantPositionProperty).setValue(pos as Cesium.Cartesian3)
+      targetPoint.show = true
+      const carto = Cesium.Cartographic.fromCartesian(pos as Cesium.Cartesian3)
+      console.log(
+        `[point] 标记点: lon ${Cesium.Math.toDegrees(carto.longitude).toFixed(6)}°, ` +
+        `lat ${Cesium.Math.toDegrees(carto.latitude).toFixed(6)}°, alt ${carto.height.toFixed(1)}m`,
+      )
+    }
+  },
+  Cesium.ScreenSpaceEventType.LEFT_CLICK,
+  Cesium.KeyboardEventModifier.SHIFT,
+)
+
+/**
+ * 将节点移动到标记点位置。
+ *
+ * 数学推导：
+ *   worldMat = A × ourTransform     其中 A = modelToWorld × parentChain × originalMatrix
+ *   T_w = R_A × t_our + T_A
+ *   R_w = R_A × R_our
+ *
+ *   ΔT_w = R_A × Δt_our = R_w × R_ourᵀ × Δt_our
+ *   ⇒ Δt_our = R_our × inv(R_w) × ΔT_w
+ *
+ *   其中 ΔT_w = P_target − P_current（世界空间）
+ */
+function moveNodeToTarget(nodeGetter: () => Cesium.ModelNode | undefined): void {
+  // 标记点未放置 → 自动放到模型前方 100m
+  if (!targetPoint.show) {
+    placeTargetNearModel()
+  }
+
+  const node = nodeGetter()
+  if (!node) {
+    console.warn('[move] 节点尚未就绪')
+    return
+  }
+
+  const worldMat = getNodeWorldMatrix(node, new Cesium.Matrix4())
+  const currentPos = Cesium.Matrix4.getTranslation(worldMat, new Cesium.Cartesian3())
+  const targetPos = (targetPoint.position as Cesium.ConstantPositionProperty).getValue(
+    new Cesium.JulianDate(),
+  ) as Cesium.Cartesian3
+
+  // 世界偏移
+  const worldDelta = Cesium.Cartesian3.subtract(targetPos, currentPos, new Cesium.Cartesian3())
+
+  // R_w（含 scale），R_our（从 node.matrix 剥离）
+  const R_w = Cesium.Matrix4.getMatrix3(worldMat, new Cesium.Matrix3())
+  const ourTransform = Cesium.Matrix4.multiply(
+    Cesium.Matrix4.inverse(node.originalMatrix, new Cesium.Matrix4()),
+    node.matrix,
+    new Cesium.Matrix4(),
+  )
+  const R_our = Cesium.Matrix4.getMatrix3(ourTransform, new Cesium.Matrix3())
+
+  // Δt_our = R_our × inv(R_w) × Δw
+  const invR_w = Cesium.Matrix3.inverse(R_w, new Cesium.Matrix3())
+  const temp = Cesium.Matrix3.multiplyByVector(invR_w, worldDelta, new Cesium.Cartesian3())
+  const tDelta = Cesium.Matrix3.multiplyByVector(R_our, temp, new Cesium.Cartesian3())
+
+  translation.x += tDelta.x
+  translation.y += tDelta.y
+  translation.z += tDelta.z
+
+  logTransform('move-to-point')
+
+  const dist = Cesium.Cartesian3.magnitude(worldDelta)
+  console.log(
+    `[move] 移动距离: ${dist.toFixed(2)}m (世界), ` +
+    `local=[${tDelta.x.toFixed(3)}, ${tDelta.y.toFixed(3)}, ${tDelta.z.toFixed(3)}]`,
+  )
+}
+
+// #endregion
+
+// #region 模型加载与初始化
 
 modelPromise.then((model) => {
   viewer.scene.primitives.add(model)
@@ -392,17 +486,9 @@ modelPromise.then((model) => {
     propL = model.getNode('Prop')
     propR = model.getNode('Prop__2_')
 
-    // 为左右螺旋桨节点各创建坐标轴
+    // 为左右螺旋桨各创建坐标轴
     allAxes.push(createNodeAxes(viewer.scene, () => propL))
     allAxes.push(createNodeAxes(viewer.scene, () => propR))
-
-    // 调试原点标记（PointPrimitive，验证世界坐标是否正确）
-    debugDots = new Cesium.PointPrimitiveCollection()
-    debugDotRefs.push(
-      debugDots.add({ position: Cesium.Cartesian3.ZERO, color: Cesium.Color.YELLOW, pixelSize: 8 }),
-      debugDots.add({ position: Cesium.Cartesian3.ZERO, color: Cesium.Color.YELLOW, pixelSize: 8 }),
-    )
-    viewer.scene.primitives.add(debugDots)
 
     // 略带俯仰，便于同时看到两侧螺旋桨
     const tilt = Cesium.Matrix4.fromRotationTranslation(
@@ -418,7 +504,6 @@ modelPromise.then((model) => {
 
 // #region 工具栏
 
-// ── 螺旋桨转速 ──
 Sandcastle.addToolbarMenu([
   { text: '⏹ 停止', onselect: () => { propAngularVelocity = 0 } },
   { text: '🐢 慢速 100 RPM', onselect: () => { propAngularVelocity = Cesium.Math.toRadians(100 * 6) } },
@@ -441,7 +526,19 @@ Sandcastle.addToolbarMenu([
   { text: '⬇ -Z (下)', onselect: () => { translation.z -= 0.1; logTransform('toolbar') } },
 ])
 
-// ── 六自由度：重置 ──
+// ── 移动到标记点 ──
+Sandcastle.addToolbarMenu([
+  {
+    text: '📍 左桨 → 标记点',
+    onselect: () => { moveNodeToTarget(() => propL!) },
+  },
+  {
+    text: '📍 右桨 → 标记点',
+    onselect: () => { moveNodeToTarget(() => propR!) },
+  },
+])
+
+// ── 重置 ──
 Sandcastle.addToolbarMenu([
   {
     text: '🔄 重置 6-DOF',
@@ -449,6 +546,7 @@ Sandcastle.addToolbarMenu([
       translation.x = 0; translation.y = 0; translation.z = 0
       extraRotation.heading = 0; extraRotation.pitch = 0; extraRotation.roll = 0
       propAngle = 0
+      targetPoint.show = false
       logTransform('reset')
     },
   },
@@ -464,14 +562,12 @@ Sandcastle.addToggleButton('显示节点坐标轴', true, (checked: boolean) => 
     data.lines.show = checked
     data.labels.show = checked
   }
-  if (debugDots) debugDots.show = checked
 })
 
 // #endregion
 
 // #region 视角
 
-// 视角定位到模型斜后方
 modelPromise.then(() => {
   viewer.camera.flyTo({
     destination: Cesium.Cartesian3.fromDegrees(LON, LAT, ALT + 800),
