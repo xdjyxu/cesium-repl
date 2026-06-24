@@ -48,6 +48,8 @@ let propAngle = 0
 /** 左/右螺旋桨节点引用 */
 let propL: Cesium.ModelNode | undefined
 let propR: Cesium.ModelNode | undefined
+/** 模型引用（坐标轴更新需要） */
+let currentModel: Cesium.Model | undefined
 
 /**
  * 6-DOF 平移偏移（模型空间，米）。
@@ -61,12 +63,17 @@ const translation = new Cesium.Cartesian3()
  */
 const extraRotation = new Cesium.HeadingPitchRoll()
 
-/** 坐标轴长度（模型空间，米） */
-const AXIS_LENGTH = 0.8
 /** 坐标轴是否可见 */
 let showAxes = true
-/** 坐标轴实体引用 */
-let axesEntities: Cesium.Entity[] = []
+/** 坐标轴线集合（PolylineCollection） */
+let axisLines: Cesium.PolylineCollection | undefined
+/** 坐标轴标签集合（LabelCollection） */
+let axisLabels: Cesium.LabelCollection | undefined
+/** 轴线引用，用于每帧更新位置 */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const axisPolylineRefs: any[] = []
+/** 轴标签订义，用于每帧更新位置 */
+const axisLabelDefs: { label: Cesium.Label; axisIndex: number }[] = []
 
 // ── 核心变换函数 ─────────────────────────────────────
 
@@ -90,88 +97,146 @@ function applyNodeTransform(
   node.matrix = Cesium.Matrix4.multiply(node.originalMatrix, rt, new Cesium.Matrix4())
 }
 
-// ── 坐标轴可视化 ─────────────────────────────────────
+// ── 坐标轴可视化（PolylineCollection + LabelCollection） ──
 
 /**
- * 为指定节点创建本地坐标轴可视化（三根线段：X红 / Y绿 / Z蓝）。
+ * 计算节点的世界矩阵（含模型缩放）。
  *
- * 使用 CallbackProperty 自动每帧更新，跟随节点的世界变换。
- * 即使节点通过 node.matrix 做了 6-DOF 变换，轴线仍正确反映当前朝向和位置。
+ * 变换链: world = modelMatrix × Scale × nodeLocalMatrix
+ * 缩放只影响平移分量；旋转分量不受缩放影响（方向归一化后一致）。
+ */
+function getNodeWorldMatrix(
+  model: Cesium.Model,
+  node: Cesium.ModelNode,
+  result: Cesium.Matrix4,
+): Cesium.Matrix4 {
+  const scale = model.scale
+  const localTrans = Cesium.Matrix4.getTranslation(node.matrix, new Cesium.Cartesian3())
+  const scaledTrans = Cesium.Cartesian3.multiplyByScalar(localTrans, scale, new Cesium.Cartesian3())
+  const worldTrans = Cesium.Matrix4.multiplyByPoint(model.modelMatrix, scaledTrans, new Cesium.Cartesian3())
+
+  const localRot = Cesium.Matrix4.getMatrix3(node.matrix, new Cesium.Matrix3())
+  const modelRot = Cesium.Matrix4.getMatrix3(model.modelMatrix, new Cesium.Matrix3())
+  const worldRot = Cesium.Matrix3.multiply(modelRot, localRot, new Cesium.Matrix3())
+
+  return Cesium.Matrix4.fromRotationTranslation(worldRot, worldTrans, result)
+}
+
+/**
+ * 根据相机距离计算世界空间轴长，保证屏幕空间约 targetPixels 像素。
+ */
+function computeAxisLength(worldPos: Cesium.Cartesian3, targetPixels: number = 60): number {
+  const distance = Cesium.Cartesian3.distance(viewer.camera.position, worldPos)
+  const canvasHeight = viewer.canvas.height
+  let fovY = Math.PI / 3 // 默认 60°
+  const frustum = viewer.camera.frustum as { fovy?: number }
+  if (frustum.fovy !== undefined) {
+    fovY = frustum.fovy
+  }
+  return distance * (targetPixels / canvasHeight) * 2 * Math.tan(fovY / 2)
+}
+
+/**
+ * 为指定节点创建坐标轴可视化。
+ *
+ * 使用 PolylineCollection 绘制轴线、LabelCollection 放置轴标签，
+ * 每帧在 preRender 中手动更新位置——比 Entity + CallbackProperty 更可靠。
  */
 function createNodeAxes(
+  scene: Cesium.Scene,
   model: Cesium.Model,
   nodeGetter: () => Cesium.ModelNode | undefined,
-  axisLength: number,
-): Cesium.Entity[] {
-  const colors = [Cesium.Color.RED, Cesium.Color.LIME, Cesium.Color.DODGERBLUE]
-  const labels = ['X', 'Y', 'Z']
+): { lines: Cesium.PolylineCollection; labels: Cesium.LabelCollection } {
+  const lineColors = [Cesium.Color.RED, Cesium.Color.LIME, Cesium.Color.DODGERBLUE]
+  const labelTexts = ['X', 'Y', 'Z']
 
-  return colors.map((color, i) => {
-    return viewer.entities.add({
-      polyline: {
-        positions: new Cesium.CallbackProperty(() => {
-          const node = nodeGetter()
-          if (!node || !showAxes) return []
+  const lines = new Cesium.PolylineCollection()
+  const labels = new Cesium.LabelCollection({ scene })
 
-          // 计算节点世界矩阵：modelMatrix × nodeLocalMatrix
-          const worldMat = Cesium.Matrix4.multiply(
-            model.modelMatrix,
-            node.matrix,
-            new Cesium.Matrix4(),
-          )
-          const origin = Cesium.Matrix4.getTranslation(worldMat, new Cesium.Cartesian3())
-          const rot = Cesium.Matrix4.getMatrix3(worldMat, new Cesium.Matrix3())
-          const dir = Cesium.Matrix3.getColumn(rot, i, new Cesium.Cartesian3())
-          const end = new Cesium.Cartesian3()
-          Cesium.Cartesian3.add(
-            origin,
-            Cesium.Cartesian3.multiplyByScalar(dir, axisLength, new Cesium.Cartesian3()),
-            end,
-          )
-          return [origin, end]
-        }, false),
-        material: color,
-        width: 2,
-        depthFailMaterial: color.withAlpha(0.3),
-      },
-      label: {
-        text: labels[i],
-        font: 'bold 12px monospace',
-        fillColor: color,
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 1,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        scale: 0.7,
-        pixelOffset: new Cesium.CallbackProperty(() => {
-          const node = nodeGetter()
-          if (!node) return new Cesium.Cartesian2(10, -10)
+  for (let i = 0; i < 3; i++) {
+    // 占位位置，会在 preRender 中更新
+    const placeholder = Cesium.Cartesian3.ZERO
 
-          const worldMat = Cesium.Matrix4.multiply(
-            model.modelMatrix,
-            node.matrix,
-            new Cesium.Matrix4(),
-          )
-          const origin = Cesium.Matrix4.getTranslation(worldMat, new Cesium.Cartesian3())
-          const rot = Cesium.Matrix4.getMatrix3(worldMat, new Cesium.Matrix3())
-          const dir = Cesium.Matrix3.getColumn(rot, i, new Cesium.Cartesian3())
-          const tip = new Cesium.Cartesian3()
-          Cesium.Cartesian3.add(
-            origin,
-            Cesium.Cartesian3.multiplyByScalar(dir, axisLength * 1.15, new Cesium.Cartesian3()),
-            tip,
-          )
-          const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-            viewer.scene,
-            tip,
-            new Cesium.Cartesian2(),
-          )
-          return screen ?? new Cesium.Cartesian2(10, -10)
-        }, false),
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
-      show: new Cesium.CallbackProperty(() => showAxes && !!nodeGetter(), false),
+    const polyline = lines.add({
+      positions: [placeholder, placeholder],
+      width: 3,
+      material: Cesium.Material.fromType('Color', { color: lineColors[i] }),
     })
-  })
+    axisPolylineRefs.push(polyline)
+
+    const label = labels.add({
+      position: placeholder,
+      text: labelTexts[i],
+      font: 'bold 14px monospace',
+      fillColor: lineColors[i],
+      outlineColor: Cesium.Color.BLACK,
+      outlineWidth: 2,
+      style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+      scale: 0.8,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      show: true,
+    })
+    axisLabelDefs.push({ label, axisIndex: i })
+  }
+
+  scene.primitives.add(lines)
+  scene.primitives.add(labels)
+
+  return { lines, labels }
+}
+
+/**
+ * 每帧更新坐标轴的位置和朝向。
+ */
+function updateAxes(
+  model: Cesium.Model,
+  nodeGetter: () => Cesium.ModelNode | undefined,
+): void {
+  if (!showAxes || !axisLines) {
+    if (axisLines) axisLines.show = false
+    if (axisLabels) axisLabels.show = false
+    return
+  }
+
+  const node = nodeGetter()
+  if (!node) {
+    axisLines.show = false
+    axisLabels.show = false
+    return
+  }
+
+  axisLines.show = true
+  axisLabels.show = true
+
+  const worldMat = getNodeWorldMatrix(model, node, new Cesium.Matrix4())
+  const origin = Cesium.Matrix4.getTranslation(worldMat, new Cesium.Cartesian3())
+  const rot = Cesium.Matrix4.getMatrix3(worldMat, new Cesium.Matrix3())
+
+  const length = computeAxisLength(origin)
+
+  // 更新三根轴线
+  for (let i = 0; i < axisPolylineRefs.length; i++) {
+    const dir = Cesium.Matrix3.getColumn(rot, i, new Cesium.Cartesian3())
+    const end = new Cesium.Cartesian3()
+    Cesium.Cartesian3.add(
+      origin,
+      Cesium.Cartesian3.multiplyByScalar(dir, length, new Cesium.Cartesian3()),
+      end,
+    )
+    axisPolylineRefs[i].positions = [origin, end]
+  }
+
+  // 更新轴标签
+  for (const { label, axisIndex } of axisLabelDefs) {
+    const dir = Cesium.Matrix3.getColumn(rot, axisIndex, new Cesium.Cartesian3())
+    const tip = new Cesium.Cartesian3()
+    Cesium.Cartesian3.add(
+      origin,
+      Cesium.Cartesian3.multiplyByScalar(dir, length * 1.1, new Cesium.Cartesian3()),
+      tip,
+    )
+    label.position = tip
+  }
 }
 
 // ── 调试输出 ─────────────────────────────────────────
@@ -257,19 +322,25 @@ viewer.scene.preRender.addEventListener(() => {
 
   applyNodeTransform(propL, translation, hpr)
   applyNodeTransform(propR, translation, hpr)
+
+  // 更新节点坐标轴（需要 model 引用，从外部捕获）
+  updateAxes(currentModel!, () => propL)
 })
 
 // ── 模型加载与初始化 ─────────────────────────────────
 
 modelPromise.then((model) => {
   viewer.scene.primitives.add(model)
+  currentModel = model
 
   model.readyEvent.addEventListener(() => {
     propL = model.getNode('Prop')
     propR = model.getNode('Prop__2_')
 
-    // 为左螺旋桨节点创建局部坐标轴
-    axesEntities = createNodeAxes(model, () => propL, AXIS_LENGTH)
+    // 为左螺旋桨节点创建局部坐标轴（PolylineCollection + LabelCollection）
+    const axes = createNodeAxes(viewer.scene, model, () => propL)
+    axisLines = axes.lines
+    axisLabels = axes.labels
 
     // 略带俯仰，便于同时看到两侧螺旋桨
     const tilt = Cesium.Matrix4.fromRotationTranslation(
@@ -327,6 +398,8 @@ Sandcastle.addToggleButton('显示包围盒', false, (checked: boolean) => {
 
 Sandcastle.addToggleButton('显示节点坐标轴', true, (checked: boolean) => {
   showAxes = checked
+  if (axisLines) axisLines.show = checked
+  if (axisLabels) axisLabels.show = checked
 })
 
 // #endregion
