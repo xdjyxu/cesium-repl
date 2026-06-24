@@ -52,7 +52,7 @@ let propR: Cesium.ModelNode | undefined
 let currentModel: Cesium.Model | undefined
 
 /**
- * 6-DOF 平移偏移（模型空间，米）。
+ * 6-DOF 平移偏移（模型空间）。
  * X = 机头方向（螺旋桨自旋轴），Y = 机身右侧，Z = 机身上方。
  */
 const translation = new Cesium.Cartesian3()
@@ -65,15 +65,6 @@ const extraRotation = new Cesium.HeadingPitchRoll()
 
 /** 坐标轴是否可见 */
 let showAxes = true
-/** 坐标轴线集合（PolylineCollection） */
-let axisLines: Cesium.PolylineCollection | undefined
-/** 坐标轴标签集合（LabelCollection） */
-let axisLabels: Cesium.LabelCollection | undefined
-/** 轴线引用，用于每帧更新位置 */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const axisPolylineRefs: any[] = []
-/** 轴标签订义，用于每帧更新位置 */
-const axisLabelDefs: { label: Cesium.Label; axisIndex: number }[] = []
 
 // ── 核心变换函数 ─────────────────────────────────────
 
@@ -97,35 +88,29 @@ function applyNodeTransform(
   node.matrix = Cesium.Matrix4.multiply(node.originalMatrix, rt, new Cesium.Matrix4())
 }
 
-// ── 坐标轴可视化（PolylineCollection + LabelCollection） ──
+// ── 坐标轴可视化 ─────────────────────────────────────
 
-/**
- * 计算节点的世界矩阵（含模型缩放）。
- *
- * 变换链: world = modelMatrix × Scale × nodeLocalMatrix
- * 缩放只影响平移分量；旋转分量不受缩放影响（方向归一化后一致）。
- */
-function getNodeWorldMatrix(
-  model: Cesium.Model,
-  node: Cesium.ModelNode,
-  result: Cesium.Matrix4,
-): Cesium.Matrix4 {
-  const scale = model.scale
-  const localTrans = Cesium.Matrix4.getTranslation(node.matrix, new Cesium.Cartesian3())
-  const scaledTrans = Cesium.Cartesian3.multiplyByScalar(localTrans, scale, new Cesium.Cartesian3())
-  const worldTrans = Cesium.Matrix4.multiplyByPoint(model.modelMatrix, scaledTrans, new Cesium.Cartesian3())
-
-  const localRot = Cesium.Matrix4.getMatrix3(node.matrix, new Cesium.Matrix3())
-  const modelRot = Cesium.Matrix4.getMatrix3(model.modelMatrix, new Cesium.Matrix3())
-  const worldRot = Cesium.Matrix3.multiply(modelRot, localRot, new Cesium.Matrix3())
-
-  return Cesium.Matrix4.fromRotationTranslation(worldRot, worldTrans, result)
+/** 单个节点的坐标轴数据 */
+interface NodeAxesData {
+  /** 坐标轴线集合（local-space 定义，modelMatrix 定位） */
+  lines: Cesium.PolylineCollection
+  /** 坐标轴标签集合 */
+  labels: Cesium.LabelCollection
+  /** 三根轴的 polyline 引用（X/Y/Z） */
+  polylineRefs: any[] // Polyline[]
+  /** 三个标签引用 */
+  labelRefs: Cesium.Label[]
+  /** 获取目标节点 */
+  nodeGetter: () => Cesium.ModelNode | undefined
 }
 
+/** 所有节点的坐标轴 */
+const allAxes: NodeAxesData[] = []
+
 /**
- * 根据相机距离计算世界空间轴长，保证屏幕空间约 targetPixels 像素。
+ * 根据相机距离计算世界空间长度，保证屏幕空间约 targetPixels 像素。
  */
-function computeAxisLength(worldPos: Cesium.Cartesian3, targetPixels: number = 60): number {
+function computeWorldLength(worldPos: Cesium.Cartesian3, targetPixels: number = 60): number {
   const distance = Cesium.Cartesian3.distance(viewer.camera.position, worldPos)
   const canvasHeight = viewer.canvas.height
   let fovY = Math.PI / 3 // 默认 60°
@@ -139,33 +124,39 @@ function computeAxisLength(worldPos: Cesium.Cartesian3, targetPixels: number = 6
 /**
  * 为指定节点创建坐标轴可视化。
  *
- * 使用 PolylineCollection 绘制轴线、LabelCollection 放置轴标签，
- * 每帧在 preRender 中手动更新位置——比 Entity + CallbackProperty 更可靠。
+ * 核心思路：
+ *   1. Polyline 在 local space 定义（原点 + 轴长），不随帧更新
+ *   2. PolylineCollection.modelMatrix 设为节点世界矩阵，Cesium 自动变换
+ *   3. 仅更新标签的世界位置和轴长（保持屏幕像素尺寸一致）
  */
 function createNodeAxes(
   scene: Cesium.Scene,
-  model: Cesium.Model,
   nodeGetter: () => Cesium.ModelNode | undefined,
-): { lines: Cesium.PolylineCollection; labels: Cesium.LabelCollection } {
+): NodeAxesData {
   const lineColors = [Cesium.Color.RED, Cesium.Color.LIME, Cesium.Color.DODGERBLUE]
   const labelTexts = ['X', 'Y', 'Z']
 
   const lines = new Cesium.PolylineCollection()
   const labels = new Cesium.LabelCollection({ scene })
+  const polylineRefs: any[] = []
+  const labelRefs: Cesium.Label[] = []
 
   for (let i = 0; i < 3; i++) {
-    // 占位位置，会在 preRender 中更新
-    const placeholder = Cesium.Cartesian3.ZERO
+    // local space: origin → 1 unit along axis（长度由每帧 scale 调整）
+    const tip = Cesium.Cartesian3.ZERO.clone()
+    if (i === 0) tip.x = 1.0
+    else if (i === 1) tip.y = 1.0
+    else tip.z = 1.0
 
     const polyline = lines.add({
-      positions: [placeholder, placeholder],
+      positions: [Cesium.Cartesian3.ZERO, tip],
       width: 3,
       material: Cesium.Material.fromType('Color', { color: lineColors[i] }),
     })
-    axisPolylineRefs.push(polyline)
+    polylineRefs.push(polyline)
 
     const label = labels.add({
-      position: placeholder,
+      position: tip, // 每帧更新到世界空间
       text: labelTexts[i],
       font: 'bold 14px monospace',
       fillColor: lineColors[i],
@@ -174,68 +165,70 @@ function createNodeAxes(
       style: Cesium.LabelStyle.FILL_AND_OUTLINE,
       scale: 0.8,
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      show: true,
     })
-    axisLabelDefs.push({ label, axisIndex: i })
+    labelRefs.push(label)
   }
 
   scene.primitives.add(lines)
   scene.primitives.add(labels)
 
-  return { lines, labels }
+  return { lines, labels, polylineRefs, labelRefs, nodeGetter }
 }
 
 /**
- * 每帧更新坐标轴的位置和朝向。
+ * 每帧更新单个节点的坐标轴。
  */
-function updateAxes(
-  model: Cesium.Model,
-  nodeGetter: () => Cesium.ModelNode | undefined,
-): void {
-  if (!showAxes || !axisLines) {
-    if (axisLines) axisLines.show = false
-    if (axisLabels) axisLabels.show = false
+function updateNodeAxes(data: NodeAxesData, model: Cesium.Model): void {
+  const node = data.nodeGetter()
+  if (!node || !showAxes) {
+    data.lines.show = false
+    data.labels.show = false
     return
   }
 
-  const node = nodeGetter()
-  if (!node) {
-    axisLines.show = false
-    axisLabels.show = false
-    return
+  data.lines.show = true
+  data.labels.show = true
+
+  // 1. 构建节点世界矩阵: modelMatrix × Scale × nodeLocalMatrix
+  const scaleMat = Cesium.Matrix4.fromUniformScale(model.scale, new Cesium.Matrix4())
+  const scaledNode = Cesium.Matrix4.multiply(scaleMat, node.matrix, new Cesium.Matrix4())
+  const worldMat = Cesium.Matrix4.multiply(model.modelMatrix, scaledNode, new Cesium.Matrix4())
+
+  // 2. 用世界原点计算屏幕适配轴长
+  const worldOrigin = Cesium.Matrix4.getTranslation(worldMat, new Cesium.Cartesian3())
+  const worldLength = computeWorldLength(worldOrigin)
+  const localLength = worldLength / model.scale
+
+  // 3. 更新 polyline 端点（local space，只需改轴长）
+  for (let i = 0; i < 3; i++) {
+    const tip = Cesium.Cartesian3.ZERO.clone()
+    if (i === 0) tip.x = localLength
+    else if (i === 1) tip.y = localLength
+    else tip.z = localLength
+    data.polylineRefs[i].positions = [Cesium.Cartesian3.ZERO, tip]
   }
 
-  axisLines.show = true
-  axisLabels.show = true
+  // 4. PolylineCollection.modelMatrix 处理旋转+世界定位
+  data.lines.modelMatrix = worldMat
 
-  const worldMat = getNodeWorldMatrix(model, node, new Cesium.Matrix4())
-  const origin = Cesium.Matrix4.getTranslation(worldMat, new Cesium.Cartesian3())
-  const rot = Cesium.Matrix4.getMatrix3(worldMat, new Cesium.Matrix3())
-
-  const length = computeAxisLength(origin)
-
-  // 更新三根轴线
-  for (let i = 0; i < axisPolylineRefs.length; i++) {
-    const dir = Cesium.Matrix3.getColumn(rot, i, new Cesium.Cartesian3())
-    const end = new Cesium.Cartesian3()
-    Cesium.Cartesian3.add(
-      origin,
-      Cesium.Cartesian3.multiplyByScalar(dir, length, new Cesium.Cartesian3()),
-      end,
-    )
-    axisPolylineRefs[i].positions = [origin, end]
+  // 5. 标签位置（世界空间）
+  for (let i = 0; i < 3; i++) {
+    const localTip = Cesium.Cartesian3.ZERO.clone()
+    if (i === 0) localTip.x = localLength * 1.1
+    else if (i === 1) localTip.y = localLength * 1.1
+    else localTip.z = localLength * 1.1
+    const worldTip = Cesium.Matrix4.multiplyByPoint(worldMat, localTip, new Cesium.Cartesian3())
+    data.labelRefs[i].position = worldTip
   }
+}
 
-  // 更新轴标签
-  for (const { label, axisIndex } of axisLabelDefs) {
-    const dir = Cesium.Matrix3.getColumn(rot, axisIndex, new Cesium.Cartesian3())
-    const tip = new Cesium.Cartesian3()
-    Cesium.Cartesian3.add(
-      origin,
-      Cesium.Cartesian3.multiplyByScalar(dir, length * 1.1, new Cesium.Cartesian3()),
-      tip,
-    )
-    label.position = tip
+/**
+ * 更新所有节点的坐标轴。
+ */
+function updateAllAxes(): void {
+  if (!currentModel) return
+  for (const data of allAxes) {
+    updateNodeAxes(data, currentModel)
   }
 }
 
@@ -258,9 +251,15 @@ const STEP_TRANSLATE = 0.05 // 米/次（微调）
 const STEP_TRANSLATE_FAST = 0.5 // 米/次（Shift 加速）
 const STEP_ROTATE = Cesium.Math.toRadians(2) // 弧度/次
 
-document.addEventListener('keydown', (e) => {
-  // 焦点在输入框时跳过
-  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+// 让 canvas 可聚焦，确保键盘事件到达
+viewer.canvas.setAttribute('tabindex', '0')
+viewer.canvas.style.outline = 'none'
+
+// 使用 window 级别监听，比 document 更可靠
+window.addEventListener('keydown', (e) => {
+  // 焦点在输入框/下拉框时跳过
+  const tag = (e.target as HTMLElement).tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
 
   const fast = e.shiftKey
   const dt = fast ? STEP_TRANSLATE_FAST : STEP_TRANSLATE
@@ -300,6 +299,11 @@ document.addEventListener('keydown', (e) => {
   logTransform('keyboard')
 })
 
+// 点击 canvas 时聚焦，确保后续键盘输入生效
+viewer.canvas.addEventListener('click', () => {
+  viewer.canvas.focus()
+})
+
 // ── 每帧更新 ─────────────────────────────────────────
 
 let lastWallTime = performance.now()
@@ -323,8 +327,8 @@ viewer.scene.preRender.addEventListener(() => {
   applyNodeTransform(propL, translation, hpr)
   applyNodeTransform(propR, translation, hpr)
 
-  // 更新节点坐标轴（需要 model 引用，从外部捕获）
-  updateAxes(currentModel!, () => propL)
+  // 更新所有节点坐标轴
+  updateAllAxes()
 })
 
 // ── 模型加载与初始化 ─────────────────────────────────
@@ -337,10 +341,9 @@ modelPromise.then((model) => {
     propL = model.getNode('Prop')
     propR = model.getNode('Prop__2_')
 
-    // 为左螺旋桨节点创建局部坐标轴（PolylineCollection + LabelCollection）
-    const axes = createNodeAxes(viewer.scene, model, () => propL)
-    axisLines = axes.lines
-    axisLabels = axes.labels
+    // 为左右螺旋桨节点各创建坐标轴
+    allAxes.push(createNodeAxes(viewer.scene, () => propL))
+    allAxes.push(createNodeAxes(viewer.scene, () => propR))
 
     // 略带俯仰，便于同时看到两侧螺旋桨
     const tilt = Cesium.Matrix4.fromRotationTranslation(
@@ -398,8 +401,10 @@ Sandcastle.addToggleButton('显示包围盒', false, (checked: boolean) => {
 
 Sandcastle.addToggleButton('显示节点坐标轴', true, (checked: boolean) => {
   showAxes = checked
-  if (axisLines) axisLines.show = checked
-  if (axisLabels) axisLabels.show = checked
+  for (const data of allAxes) {
+    data.lines.show = checked
+    data.labels.show = checked
+  }
 })
 
 // #endregion
