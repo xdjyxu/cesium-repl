@@ -1,0 +1,5 @@
+legacyId: model-node-control.html
+title: Model Node Control
+description: Drive glTF node transforms at runtime — 6-DOF control (translation + rotation) with propeller spin on Cesium_Air
+labels:
+  - Advanced
