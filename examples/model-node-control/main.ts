@@ -61,6 +61,13 @@ const translation = new Cesium.Cartesian3()
  */
 const extraRotation = new Cesium.HeadingPitchRoll()
 
+/** 坐标轴长度（模型空间，米） */
+const AXIS_LENGTH = 0.8
+/** 坐标轴是否可见 */
+let showAxes = true
+/** 坐标轴实体引用 */
+let axesEntities: Cesium.Entity[] = []
+
 // ── 核心变换函数 ─────────────────────────────────────
 
 /**
@@ -81,6 +88,90 @@ function applyNodeTransform(
   const rot = Cesium.Matrix3.fromHeadingPitchRoll(hpr, new Cesium.Matrix3())
   const rt = Cesium.Matrix4.fromRotationTranslation(rot, translation, new Cesium.Matrix4())
   node.matrix = Cesium.Matrix4.multiply(node.originalMatrix, rt, new Cesium.Matrix4())
+}
+
+// ── 坐标轴可视化 ─────────────────────────────────────
+
+/**
+ * 为指定节点创建本地坐标轴可视化（三根线段：X红 / Y绿 / Z蓝）。
+ *
+ * 使用 CallbackProperty 自动每帧更新，跟随节点的世界变换。
+ * 即使节点通过 node.matrix 做了 6-DOF 变换，轴线仍正确反映当前朝向和位置。
+ */
+function createNodeAxes(
+  model: Cesium.Model,
+  nodeGetter: () => Cesium.ModelNode | undefined,
+  axisLength: number,
+): Cesium.Entity[] {
+  const colors = [Cesium.Color.RED, Cesium.Color.LIME, Cesium.Color.DODGERBLUE]
+  const labels = ['X', 'Y', 'Z']
+
+  return colors.map((color, i) => {
+    return viewer.entities.add({
+      polyline: {
+        positions: new Cesium.CallbackProperty(() => {
+          const node = nodeGetter()
+          if (!node || !showAxes) return []
+
+          // 计算节点世界矩阵：modelMatrix × nodeLocalMatrix
+          const worldMat = Cesium.Matrix4.multiply(
+            model.modelMatrix,
+            node.matrix,
+            new Cesium.Matrix4(),
+          )
+          const origin = Cesium.Matrix4.getTranslation(worldMat, new Cesium.Cartesian3())
+          const rot = Cesium.Matrix4.getMatrix3(worldMat, new Cesium.Matrix3())
+          const dir = Cesium.Matrix3.getColumn(rot, i, new Cesium.Cartesian3())
+          const end = new Cesium.Cartesian3()
+          Cesium.Cartesian3.add(
+            origin,
+            Cesium.Cartesian3.multiplyByScalar(dir, axisLength, new Cesium.Cartesian3()),
+            end,
+          )
+          return [origin, end]
+        }, false),
+        material: color,
+        width: 2,
+        depthFailMaterial: color.withAlpha(0.3),
+      },
+      label: {
+        text: labels[i],
+        font: 'bold 12px monospace',
+        fillColor: color,
+        outlineColor: Cesium.Color.BLACK,
+        outlineWidth: 1,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        scale: 0.7,
+        pixelOffset: new Cesium.CallbackProperty(() => {
+          const node = nodeGetter()
+          if (!node) return new Cesium.Cartesian2(10, -10)
+
+          const worldMat = Cesium.Matrix4.multiply(
+            model.modelMatrix,
+            node.matrix,
+            new Cesium.Matrix4(),
+          )
+          const origin = Cesium.Matrix4.getTranslation(worldMat, new Cesium.Cartesian3())
+          const rot = Cesium.Matrix4.getMatrix3(worldMat, new Cesium.Matrix3())
+          const dir = Cesium.Matrix3.getColumn(rot, i, new Cesium.Cartesian3())
+          const tip = new Cesium.Cartesian3()
+          Cesium.Cartesian3.add(
+            origin,
+            Cesium.Cartesian3.multiplyByScalar(dir, axisLength * 1.15, new Cesium.Cartesian3()),
+            tip,
+          )
+          const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
+            viewer.scene,
+            tip,
+            new Cesium.Cartesian2(),
+          )
+          return screen ?? new Cesium.Cartesian2(10, -10)
+        }, false),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+      show: new Cesium.CallbackProperty(() => showAxes && !!nodeGetter(), false),
+    })
+  })
 }
 
 // ── 调试输出 ─────────────────────────────────────────
@@ -177,6 +268,9 @@ modelPromise.then((model) => {
     propL = model.getNode('Prop')
     propR = model.getNode('Prop__2_')
 
+    // 为左螺旋桨节点创建局部坐标轴
+    axesEntities = createNodeAxes(model, () => propL, AXIS_LENGTH)
+
     // 略带俯仰，便于同时看到两侧螺旋桨
     const tilt = Cesium.Matrix4.fromRotationTranslation(
       Cesium.Matrix3.fromRotationY(Cesium.Math.toRadians(-10), new Cesium.Matrix3()),
@@ -229,6 +323,10 @@ Sandcastle.addToolbarMenu([
 
 Sandcastle.addToggleButton('显示包围盒', false, (checked: boolean) => {
   modelPromise.then(model => { model.debugShowBoundingVolume = checked })
+})
+
+Sandcastle.addToggleButton('显示节点坐标轴', true, (checked: boolean) => {
+  showAxes = checked
 })
 
 // #endregion
