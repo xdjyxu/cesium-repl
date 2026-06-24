@@ -66,6 +66,10 @@ const extraRotation = new Cesium.HeadingPitchRoll()
 /** 坐标轴是否可见 */
 let showAxes = true
 
+/** 调试原点标记（PointPrimitive），验证世界坐标计算 */
+let debugDots: Cesium.PointPrimitiveCollection | undefined
+const debugDotRefs: Cesium.PointPrimitive[] = []
+
 // ── 核心变换函数 ─────────────────────────────────────
 
 /**
@@ -92,7 +96,7 @@ function applyNodeTransform(
 
 /** 单个节点的坐标轴数据 */
 interface NodeAxesData {
-  /** 坐标轴线集合（local-space 定义，modelMatrix 定位） */
+  /** 坐标轴线集合 */
   lines: Cesium.PolylineCollection
   /** 坐标轴标签集合 */
   labels: Cesium.LabelCollection
@@ -124,10 +128,8 @@ function computeWorldLength(worldPos: Cesium.Cartesian3, targetPixels: number = 
 /**
  * 为指定节点创建坐标轴可视化。
  *
- * 核心思路：
- *   1. Polyline 在 local space 定义（原点 + 轴长），不随帧更新
- *   2. PolylineCollection.modelMatrix 设为节点世界矩阵，Cesium 自动变换
- *   3. 仅更新标签的世界位置和轴长（保持屏幕像素尺寸一致）
+ * Polyline 位置在每帧直接设为世界空间（ECEF）坐标，
+ * 不依赖 PolylineCollection.modelMatrix 的 setter。
  */
 function createNodeAxes(
   scene: Cesium.Scene,
@@ -142,21 +144,17 @@ function createNodeAxes(
   const labelRefs: Cesium.Label[] = []
 
   for (let i = 0; i < 3; i++) {
-    // local space: origin → 1 unit along axis（长度由每帧 scale 调整）
-    const tip = Cesium.Cartesian3.ZERO.clone()
-    if (i === 0) tip.x = 1.0
-    else if (i === 1) tip.y = 1.0
-    else tip.z = 1.0
+    const placeholder = Cesium.Cartesian3.ZERO
 
     const polyline = lines.add({
-      positions: [Cesium.Cartesian3.ZERO, tip],
+      positions: [placeholder, placeholder],
       width: 3,
       material: Cesium.Material.fromType('Color', { color: lineColors[i] }),
     })
     polylineRefs.push(polyline)
 
     const label = labels.add({
-      position: tip, // 每帧更新到世界空间
+      position: placeholder,
       text: labelTexts[i],
       font: 'bold 14px monospace',
       fillColor: lineColors[i],
@@ -176,7 +174,27 @@ function createNodeAxes(
 }
 
 /**
- * 每帧更新单个节点的坐标轴。
+ * 构建节点的世界矩阵（ECEF）。
+ *
+ * 完整变换链：
+ *   world = model.modelMatrix × diag(scale) × node.matrix
+ *
+ * model.modelMatrix 包含 ENU 定位和 -10° 俯仰倾斜；
+ * diag(scale) 放大模型内部坐标（scale=200）；
+ * node.matrix = originalMatrix × [userTranslation × headingPitchRoll]。
+ */
+function getNodeWorldMatrix(
+  model: Cesium.Model,
+  node: Cesium.ModelNode,
+  result: Cesium.Matrix4,
+): Cesium.Matrix4 {
+  const scaleMat = Cesium.Matrix4.fromUniformScale(model.scale, new Cesium.Matrix4())
+  const temp = Cesium.Matrix4.multiply(model.modelMatrix, scaleMat, new Cesium.Matrix4())
+  return Cesium.Matrix4.multiply(temp, node.matrix, result)
+}
+
+/**
+ * 每帧更新单个节点的坐标轴——直接设置世界坐标，不依赖 modelMatrix setter。
  */
 function updateNodeAxes(data: NodeAxesData, model: Cesium.Model): void {
   const node = data.nodeGetter()
@@ -189,36 +207,52 @@ function updateNodeAxes(data: NodeAxesData, model: Cesium.Model): void {
   data.lines.show = true
   data.labels.show = true
 
-  // 1. 构建节点世界矩阵: modelMatrix × Scale × nodeLocalMatrix
-  const scaleMat = Cesium.Matrix4.fromUniformScale(model.scale, new Cesium.Matrix4())
-  const scaledNode = Cesium.Matrix4.multiply(scaleMat, node.matrix, new Cesium.Matrix4())
-  const worldMat = Cesium.Matrix4.multiply(model.modelMatrix, scaledNode, new Cesium.Matrix4())
+  // 节点世界矩阵（ECEF）
+  const worldMat = getNodeWorldMatrix(model, node, new Cesium.Matrix4())
+  const origin = Cesium.Matrix4.getTranslation(worldMat, new Cesium.Cartesian3())
+  const rot = Cesium.Matrix4.getMatrix3(worldMat, new Cesium.Matrix3())
 
-  // 2. 用世界原点计算屏幕适配轴长
-  const worldOrigin = Cesium.Matrix4.getTranslation(worldMat, new Cesium.Cartesian3())
-  const worldLength = computeWorldLength(worldOrigin)
-  const localLength = worldLength / model.scale
-
-  // 3. 更新 polyline 端点（local space，只需改轴长）
-  for (let i = 0; i < 3; i++) {
-    const tip = Cesium.Cartesian3.ZERO.clone()
-    if (i === 0) tip.x = localLength
-    else if (i === 1) tip.y = localLength
-    else tip.z = localLength
-    data.polylineRefs[i].positions = [Cesium.Cartesian3.ZERO, tip]
+  // 首次更新时输出调试信息
+  if (!(data as any)._debugged) {
+    (data as any)._debugged = true
+    const nodeTrans = Cesium.Matrix4.getTranslation(node.matrix, new Cesium.Cartesian3())
+    const modelCenter = Cesium.Matrix4.getTranslation(model.modelMatrix, new Cesium.Cartesian3())
+    const cartoNode = Cesium.Cartographic.fromCartesian(origin)
+    const cartoModel = Cesium.Cartographic.fromCartesian(modelCenter)
+    console.log(
+      `[axes] node="${node.name}" scale=${model.scale} ` +
+      `nodeLocal=[${nodeTrans.x.toFixed(2)},${nodeTrans.y.toFixed(2)},${nodeTrans.z.toFixed(2)}] ` +
+      `worldAlt=${cartoNode.height.toFixed(1)}m ` +
+      `modelAlt=${cartoModel.height.toFixed(1)}m ` +
+      `offsetAlt=${(cartoNode.height - cartoModel.height).toFixed(1)}m`,
+    )
   }
 
-  // 4. PolylineCollection.modelMatrix 处理旋转+世界定位
-  data.lines.modelMatrix = worldMat
+  // 屏幕自适应轴长（世界空间米）
+  const worldLength = computeWorldLength(origin)
 
-  // 5. 标签位置（世界空间）
+  // 直接在 ECEF 世界空间中设置 polyline 端点
   for (let i = 0; i < 3; i++) {
-    const localTip = Cesium.Cartesian3.ZERO.clone()
-    if (i === 0) localTip.x = localLength * 1.1
-    else if (i === 1) localTip.y = localLength * 1.1
-    else localTip.z = localLength * 1.1
-    const worldTip = Cesium.Matrix4.multiplyByPoint(worldMat, localTip, new Cesium.Cartesian3())
-    data.labelRefs[i].position = worldTip
+    const dir = Cesium.Matrix3.getColumn(rot, i, new Cesium.Cartesian3())
+    const end = new Cesium.Cartesian3()
+    Cesium.Cartesian3.add(
+      origin,
+      Cesium.Cartesian3.multiplyByScalar(dir, worldLength, new Cesium.Cartesian3()),
+      end,
+    )
+    data.polylineRefs[i].positions = [origin, end]
+  }
+
+  // 标签放在轴末端外侧
+  for (let i = 0; i < 3; i++) {
+    const dir = Cesium.Matrix3.getColumn(rot, i, new Cesium.Cartesian3())
+    const tip = new Cesium.Cartesian3()
+    Cesium.Cartesian3.add(
+      origin,
+      Cesium.Cartesian3.multiplyByScalar(dir, worldLength * 1.1, new Cesium.Cartesian3()),
+      tip,
+    )
+    data.labelRefs[i].position = tip
   }
 }
 
@@ -227,8 +261,25 @@ function updateNodeAxes(data: NodeAxesData, model: Cesium.Model): void {
  */
 function updateAllAxes(): void {
   if (!currentModel) return
-  for (const data of allAxes) {
-    updateNodeAxes(data, currentModel)
+
+  // 更新各节点坐标轴
+  for (let i = 0; i < allAxes.length; i++) {
+    updateNodeAxes(allAxes[i], currentModel)
+
+    // 更新对应的调试原点标记
+    if (debugDots && i < debugDotRefs.length) {
+      const node = allAxes[i].nodeGetter()
+      if (node && showAxes) {
+        const worldMat = getNodeWorldMatrix(currentModel, node, new Cesium.Matrix4())
+        debugDotRefs[i].position = Cesium.Matrix4.getTranslation(worldMat, new Cesium.Cartesian3())
+        debugDotRefs[i].show = true
+      } else {
+        debugDotRefs[i].show = false
+      }
+    }
+  }
+  if (debugDots) {
+    debugDots.show = showAxes
   }
 }
 
@@ -345,6 +396,14 @@ modelPromise.then((model) => {
     allAxes.push(createNodeAxes(viewer.scene, () => propL))
     allAxes.push(createNodeAxes(viewer.scene, () => propR))
 
+    // 调试原点标记（PointPrimitive，验证世界坐标是否正确）
+    debugDots = new Cesium.PointPrimitiveCollection()
+    debugDotRefs.push(
+      debugDots.add({ position: Cesium.Cartesian3.ZERO, color: Cesium.Color.YELLOW, pixelSize: 8 }),
+      debugDots.add({ position: Cesium.Cartesian3.ZERO, color: Cesium.Color.YELLOW, pixelSize: 8 }),
+    )
+    viewer.scene.primitives.add(debugDots)
+
     // 略带俯仰，便于同时看到两侧螺旋桨
     const tilt = Cesium.Matrix4.fromRotationTranslation(
       Cesium.Matrix3.fromRotationY(Cesium.Math.toRadians(-10), new Cesium.Matrix3()),
@@ -405,6 +464,7 @@ Sandcastle.addToggleButton('显示节点坐标轴', true, (checked: boolean) => 
     data.lines.show = checked
     data.labels.show = checked
   }
+  if (debugDots) debugDots.show = checked
 })
 
 // #endregion
