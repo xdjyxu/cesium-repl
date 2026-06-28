@@ -67,6 +67,15 @@ export default defineNuxtConfig({
         include: ['path', 'buffer', 'stream', 'util', 'events'],
       }),
     ],
+    server: {
+      proxy: {
+        '/sampleData': {
+          target: 'https://raw.githubusercontent.com/CesiumGS/cesium/main/Apps/SampleData',
+          changeOrigin: true,
+          rewrite: (path: string) => path.replace(/^\/sampleData/, ''),
+        },
+      },
+    },
     build: {
       // 减少内存使用
       rollupOptions: {

@@ -1,0 +1,60 @@
+<style>
+  @import url(../templates/bucket.css);
+</style>
+<div id="cesiumContainer" class="fullSize"></div>
+<div id="toolbar"></div>
+<style>
+  /* ── 分组表单控件 ─────────────────────────── */
+
+  .tool-section {
+    background: rgba(61, 64, 73, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 6px 8px;
+  }
+
+  .tool-section-title {
+    color: #888;
+    font-size: 10px;
+    font-family: sans-serif;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+
+  .tool-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 4px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .tool-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .tool-input {
+    width: 74px;
+    padding: 3px 5px;
+    background: #3d4049;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 11px;
+    font-family: monospace;
+    outline: none;
+  }
+
+  .tool-input:focus {
+    border-color: #4a90d9;
+  }
+
+  .tool-hint {
+    color: #777;
+    font-size: 10px;
+    font-family: sans-serif;
+    line-height: 1.4;
+  }
+</style>
